@@ -69,7 +69,7 @@ jobs:
     steps:
       - name: Login to SxT
         id: login
-        uses: rjlacanlaled/hyperbolic-demo/http@main
+        uses: w3-io/demo-gha-containerization-1/http@main
         with:
           url: https://proxy.api.makeinfinite.dev/auth/login
           method: POST
@@ -80,7 +80,7 @@ jobs:
 
       - name: Fetch Biscuit
         id: biscuit
-        uses: rjlacanlaled/hyperbolic-demo/http@main
+        uses: w3-io/demo-gha-containerization-1/http@main
         with:
           url: >-
             https://proxy.api.makeinfinite.dev/biscuits/generated/${{ secrets.W3_SECRET_DEMO_SXT_BISCUIT_NAME }}
@@ -107,7 +107,7 @@ jobs:
 
       - name: Execute Query
         id: query
-        uses: rjlacanlaled/hyperbolic-demo/http@main
+        uses: w3-io/demo-gha-containerization-1/http@main
         with:
           url: https://api.makeinfinite.dev/v1/sql
           method: POST
@@ -118,7 +118,7 @@ jobs:
 
       - name: Decode Results
         id: decode
-        uses: rjlacanlaled/hyperbolic-demo/base64-decode@main
+        uses: w3-io/demo-gha-containerization-1/base64-decode@main
         with:
           input-file: ${{ steps.query.outputs.response-file }}
           fields: TOP_LEVEL_HEADERS,BODY_PLAIN_TEXT
@@ -170,7 +170,7 @@ jobs:
 
       - name: Run Primary Model
         id: primary
-        uses: rjlacanlaled/hyperbolic-demo/http@main
+        uses: w3-io/demo-gha-containerization-1/http@main
         continue-on-error: true
         with:
           url: https://api.hyperbolic.xyz/v1/chat/completions
@@ -207,7 +207,7 @@ jobs:
       - name: Run Fallback Model
         id: fallback
         if: steps.primary.outcome == 'failure'
-        uses: rjlacanlaled/hyperbolic-demo/http@main
+        uses: w3-io/demo-gha-containerization-1/http@main
         continue-on-error: true
         with:
           url: https://api.hyperbolic.xyz/v1/chat/completions
