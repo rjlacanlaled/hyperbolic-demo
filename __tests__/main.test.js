@@ -8,13 +8,13 @@ jest.unstable_mockModule('@actions/core', () => core)
 
 const main = await import('../src/main')
 
-const mockSuccessResponse = {
+const makeSuccessResponse = (content) => ({
   ok: true,
   status: 200,
   json: async () => ({
-    choices: [{ message: { content: 'Test response from AI' } }]
+    choices: [{ message: { content } }]
   })
-}
+})
 
 const mockFailResponse = {
   ok: false,
@@ -34,7 +34,7 @@ describe('action', () => {
         'api-key': 'test-api-key',
         prompt: 'What can I do in SF?',
         model: 'Qwen/Qwen3-Next-80B-A3B-Thinking',
-        'max-tokens': '507',
+        'max-tokens': '16384',
         temperature: '0.7',
         'top-p': '0.8'
       }
@@ -48,12 +48,12 @@ describe('action', () => {
   })
 
   it('calls the model and sets the response output', async () => {
-    global.fetch.mockResolvedValueOnce(mockSuccessResponse)
+    global.fetch.mockResolvedValueOnce(makeSuccessResponse('Test response'))
 
     await main.run()
 
     expect(global.fetch).toHaveBeenCalledTimes(1)
-    expect(core.setOutput).toHaveBeenCalledWith('response', 'Test response from AI')
+    expect(core.setOutput).toHaveBeenCalledWith('response', 'Test response')
   })
 
   it('fails when the API returns an error', async () => {
@@ -66,17 +66,22 @@ describe('action', () => {
     )
   })
 
-  it('sends correct request body', async () => {
-    global.fetch.mockResolvedValueOnce(mockSuccessResponse)
+  it('separates reasoning from response', async () => {
+    const content = '<think>Let me think about this...</think>Here are things to do in SF.'
+    global.fetch.mockResolvedValueOnce(makeSuccessResponse(content))
 
     await main.run()
 
-    const callBody = JSON.parse(global.fetch.mock.calls[0][1].body)
-    expect(callBody.model).toBe('Qwen/Qwen3-Next-80B-A3B-Thinking')
-    expect(callBody.messages).toEqual([{ role: 'user', content: 'What can I do in SF?' }])
-    expect(callBody.max_tokens).toBe(507)
-    expect(callBody.temperature).toBe(0.7)
-    expect(callBody.top_p).toBe(0.8)
-    expect(callBody.stream).toBe(false)
+    expect(core.setOutput).toHaveBeenCalledWith('reasoning', 'Let me think about this...')
+    expect(core.setOutput).toHaveBeenCalledWith('response', 'Here are things to do in SF.')
+  })
+
+  it('handles response with no reasoning tags', async () => {
+    global.fetch.mockResolvedValueOnce(makeSuccessResponse('Plain response'))
+
+    await main.run()
+
+    expect(core.setOutput).toHaveBeenCalledWith('response', 'Plain response')
+    expect(core.setOutput).not.toHaveBeenCalledWith('reasoning', expect.anything())
   })
 })

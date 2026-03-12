@@ -27494,6 +27494,16 @@ var coreExports = requireCore();
 
 const HYPERBOLIC_API_URL = 'https://api.hyperbolic.xyz/v1/chat/completions';
 
+function parseResponse(content) {
+  const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/);
+  if (thinkMatch) {
+    const reasoning = thinkMatch[1].trim();
+    const response = content.replace(/<think>[\s\S]*?<\/think>/, '').trim();
+    return { reasoning, response }
+  }
+  return { reasoning: '', response: content }
+}
+
 /**
  * The main function for the action.
  * @returns {Promise<void>} Resolves when the action is complete.
@@ -27531,10 +27541,16 @@ async function run() {
     }
 
     const json = await response.json();
-    const result = json.choices[0].message.content;
+    const rawContent = json.choices[0].message.content;
+    const { reasoning, response: answer } = parseResponse(rawContent);
 
-    coreExports.info(`Response: ${result}`);
-    coreExports.setOutput('response', result);
+    if (reasoning) {
+      coreExports.info(`Reasoning: ${reasoning}`);
+      coreExports.setOutput('reasoning', reasoning);
+    }
+
+    coreExports.info(`Response: ${answer}`);
+    coreExports.setOutput('response', answer);
   } catch (error) {
     coreExports.error(error.stack || error.toString());
     coreExports.setFailed(error.message);

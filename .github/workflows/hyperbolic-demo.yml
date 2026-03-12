@@ -8,6 +8,31 @@ on:
         required: true
         default: 'What can I do in SF?'
         type: string
+      model:
+        description: Primary model
+        required: false
+        default: 'Qwen/Qwen3-Next-80B-A3B-Thinking'
+        type: string
+      fallback-model:
+        description: Fallback model if primary fails
+        required: false
+        default: 'meta-llama/Meta-Llama-3.1-70B-Instruct'
+        type: string
+      max-tokens:
+        description: Maximum tokens for the response
+        required: false
+        default: '16384'
+        type: string
+      temperature:
+        description: Sampling temperature
+        required: false
+        default: '0.7'
+        type: string
+      top-p:
+        description: Top-p sampling parameter
+        required: false
+        default: '0.8'
+        type: string
 
 permissions:
   actions: read
@@ -27,7 +52,10 @@ jobs:
         with:
           api-key: ${{ secrets.W3_SECRET_DEMO_HYPERBOLIC_API_KEY }}
           prompt: ${{ inputs.prompt }}
-          model: 'Qwen/Qwen3-Next-80B-A3B-Thinking'
+          model: ${{ inputs.model }}
+          max-tokens: ${{ inputs.max-tokens }}
+          temperature: ${{ inputs.temperature }}
+          top-p: ${{ inputs.top-p }}
 
       # Step 2: Fallback model if primary failed
       - name: Run Fallback Model
@@ -38,13 +66,23 @@ jobs:
         with:
           api-key: ${{ secrets.W3_SECRET_DEMO_HYPERBOLIC_API_KEY }}
           prompt: ${{ inputs.prompt }}
-          model: 'meta-llama/Meta-Llama-3.1-70B-Instruct'
+          model: ${{ inputs.fallback-model }}
+          max-tokens: ${{ inputs.max-tokens }}
+          temperature: ${{ inputs.temperature }}
+          top-p: ${{ inputs.top-p }}
 
-      # Step 3: Log output regardless of success or failure
+      # Step 3: Log output
       - name: Log Output
         env:
           PRIMARY_RESPONSE: ${{ steps.primary.outputs.response }}
+          PRIMARY_REASONING: ${{ steps.primary.outputs.reasoning }}
           FALLBACK_RESPONSE: ${{ steps.fallback.outputs.response }}
+          FALLBACK_REASONING: ${{ steps.fallback.outputs.reasoning }}
         run: |
-          echo "Primary response: ${PRIMARY_RESPONSE:-none}"
-          echo "Fallback response: ${FALLBACK_RESPONSE:-none}"
+          echo "=== Primary Model ==="
+          echo "Reasoning: ${PRIMARY_REASONING:-none}"
+          echo "Response: ${PRIMARY_RESPONSE:-none}"
+          echo ""
+          echo "=== Fallback Model ==="
+          echo "Reasoning: ${FALLBACK_REASONING:-none}"
+          echo "Response: ${FALLBACK_RESPONSE:-none}"

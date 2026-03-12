@@ -16,7 +16,7 @@ inputs:
   max-tokens:
     description: Maximum tokens for the response
     required: false
-    default: '507'
+    default: '16384'
   temperature:
     description: Sampling temperature
     required: false
@@ -28,7 +28,9 @@ inputs:
 
 outputs:
   response:
-    description: The AI response content
+    description: The AI response content (without reasoning)
+  reasoning:
+    description: The reasoning/thinking content if present
 
 runs:
   using: node24
