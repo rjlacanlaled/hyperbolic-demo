@@ -13,7 +13,7 @@ committing to ensure nothing sensitive is leaked.
 ## What This Is
 
 A GitHub Action (JavaScript) that fetches SXT auth via a shared secret. Based on
-the hello-world-javascript-action template.
+the hyperbolic-demo template.
 
 ## Commands
 

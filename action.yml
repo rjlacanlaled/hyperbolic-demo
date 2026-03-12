@@ -1,20 +1,34 @@
-name: Hello, World!
-description: Greet someone and record the time
+name: Hyperbolic Demo
+description: Run a prompt through the Hyperbolic API
 author: GitHub Actions
 
-# Define your inputs here.
 inputs:
-  sxt-auth-secret:
-    description: Shared secret for SXT auth API
+  api-key:
+    description: Hyperbolic API key
     required: true
-  sxt-endpoint-url:
-    description: SXT auth endpoint URL
+  prompt:
+    description: The user prompt to send
     required: true
+  model:
+    description: Model to use
+    required: true
+    default: 'Qwen/Qwen3-Next-80B-A3B-Thinking'
+  max-tokens:
+    description: Maximum tokens for the response
+    required: false
+    default: '507'
+  temperature:
+    description: Sampling temperature
+    required: false
+    default: '0.7'
+  top-p:
+    description: Top-p sampling parameter
+    required: false
+    default: '0.8'
 
-# Define your outputs here.
 outputs:
-  time:
-    description: The time we greeted you
+  response:
+    description: The AI response content
 
 runs:
   using: node24

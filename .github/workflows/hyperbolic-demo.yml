@@ -1,0 +1,55 @@
+name: Hyperbolic Demo Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: The prompt to send to Hyperbolic AI
+        required: true
+        default: 'What can I do in SF?'
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  run-prompt:
+    name: Run Prompt
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Try primary model
+      - name: Run Primary Model
+        id: primary
+        uses: rjlacanlaled/hyperbolic-demo@main
+        continue-on-error: true
+        with:
+          api-key: ${{ secrets.W3_SECRET_DEMO_HYPERBOLIC_API_KEY }}
+          prompt: ${{ inputs.prompt }}
+          model: 'Qwen/Qwen3-Next-80B-A3B-Thinking'
+
+      # Step 2: Fallback model if primary failed
+      - name: Run Fallback Model
+        id: fallback
+        if: steps.primary.outcome == 'failure'
+        uses: rjlacanlaled/hyperbolic-demo@main
+        continue-on-error: true
+        with:
+          api-key: ${{ secrets.W3_SECRET_DEMO_HYPERBOLIC_API_KEY }}
+          prompt: ${{ inputs.prompt }}
+          model: 'meta-llama/Meta-Llama-3.1-70B-Instruct'
+
+      # Step 3: Log output regardless of success or failure
+      - name: Log Output
+        if: always()
+        run: |
+          if [ "${{ steps.primary.outcome }}" == "success" ]; then
+            echo "Primary model succeeded:"
+            echo "${{ steps.primary.outputs.response }}"
+          elif [ "${{ steps.fallback.outcome }}" == "success" ]; then
+            echo "Fallback model succeeded:"
+            echo "${{ steps.fallback.outputs.response }}"
+          else
+            echo "Both primary and fallback models failed."
+          fi

@@ -1,5 +1,6 @@
 import * as core from '@actions/core'
-import * as github from '@actions/github'
+
+const HYPERBOLIC_API_URL = 'https://api.hyperbolic.xyz/v1/chat/completions'
 
 /**
  * The main function for the action.
@@ -7,38 +8,42 @@ import * as github from '@actions/github'
  */
 export async function run() {
   try {
-    // Fetch SXT auth using shared secret
-    const sharedSecret = core.getInput('sxt-auth-secret', { required: true })
-    if (!sharedSecret) {
-      core.setFailed('sxt-auth-secret must be a non-empty string')
-      return
-    }
-    const endpointUrl = core.getInput('sxt-endpoint-url', { required: true })
-    if (!endpointUrl) {
-      core.setFailed('sxt-endpoint-url must be a non-empty string')
-      return
-    }
-    core.info(`Fetching SXT auth from: ${endpointUrl}`)
-    const response = await fetch(endpointUrl, {
-      method: 'GET',
-      headers: {
-        'x-shared-secret': sharedSecret
-      }
-    })
-    core.info(`Response status: ${response.status} ${response.statusText}`)
-    const rawBody = await response.text()
-    core.info(`Response body: ${rawBody}`)
+    const apiKey = core.getInput('api-key', { required: true })
+    const prompt = core.getInput('prompt', { required: true })
+    const model = core.getInput('model', { required: true })
+    const maxTokens = parseInt(core.getInput('max-tokens'), 10)
+    const temperature = parseFloat(core.getInput('temperature'))
+    const topP = parseFloat(core.getInput('top-p'))
 
-    let data
-    try {
-      data = JSON.parse(rawBody)
-    } catch (parseError) {
-      core.setFailed(`Failed to parse response as JSON: ${parseError.message}`)
-      return
+    core.info(`Calling Hyperbolic API with model: ${model}`)
+
+    const response = await fetch(HYPERBOLIC_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+        temperature,
+        top_p: topP,
+        stream: false
+      })
+    })
+
+    if (!response.ok) {
+      const body = await response.text()
+      throw new Error(`API returned ${response.status}: ${body}`)
     }
-    core.setOutput('sxt-auth', JSON.stringify(data))
+
+    const json = await response.json()
+    const result = json.choices[0].message.content
+
+    core.info(`Response: ${result}`)
+    core.setOutput('response', result)
   } catch (error) {
-    // Fail the workflow step if an error occurs
     core.error(error.stack || error.toString())
     core.setFailed(error.message)
   }
