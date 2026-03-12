@@ -123,6 +123,8 @@ jobs:
           input: ${{ steps.query.outputs.response }}
           fields: TOP_LEVEL_HEADERS,BODY_PLAIN_TEXT
           limit: ${{ inputs.limit }}
+          output-fields: TOP_LEVEL_HEADERS,BODY_PLAIN_TEXT
+          select-keys: 'TOP_LEVEL_HEADERS:From,Subject'
 
       - name: Format email list
         id: format
@@ -131,8 +133,7 @@ jobs:
         run: |
           summary=$(echo "$DECODED_RESULT" | jq -r '
             [.[] |
-              (.TOP_LEVEL_HEADERS | fromjson | map(select(.name == "From" or .name == "Subject")) | from_entries) as $headers |
-              "From: \($headers.From // "unknown")\nSubject: \($headers.Subject // "no subject")\nBody: \(.BODY_PLAIN_TEXT // "empty")\n---"
+              "From: \(.TOP_LEVEL_HEADERS.From // "unknown")\nSubject: \(.TOP_LEVEL_HEADERS.Subject // "no subject")\nBody: \(.BODY_PLAIN_TEXT // "empty")\n---"
             ] | join("\n")
           ')
           {

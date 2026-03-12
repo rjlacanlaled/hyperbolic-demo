@@ -10,6 +10,36 @@ export function decodeBase64Url(str) {
   return Buffer.from(base64, 'base64').toString('utf-8')
 }
 
+/**
+ * Parse select-keys input: "FIELD:key1,key2;FIELD2:key3"
+ * Returns { FIELD: ['key1', 'key2'], FIELD2: ['key3'] }
+ */
+export function parseSelectKeys(selectKeys) {
+  const result = {}
+  if (!selectKeys) return result
+  for (const part of selectKeys.split(';')) {
+    const colonIdx = part.indexOf(':')
+    if (colonIdx === -1) continue
+    const field = part.slice(0, colonIdx).trim()
+    const keys = part
+      .slice(colonIdx + 1)
+      .split(',')
+      .map((k) => k.trim())
+    result[field] = keys
+  }
+  return result
+}
+
+/**
+ * Extract specific keys from a JSON array of {name, value} objects.
+ * Returns a flat object: { key1: val1, key2: val2 }
+ */
+export function extractKeys(jsonString, keys) {
+  const arr = JSON.parse(jsonString)
+  const selected = arr.filter((item) => keys.includes(item.name))
+  return Object.fromEntries(selected.map((item) => [item.name, item.value]))
+}
+
 export async function run() {
   try {
     const encryptionKey = core.getInput('encryption-key')
@@ -24,6 +54,13 @@ export async function run() {
       .split(',')
       .map((f) => f.trim())
     const limit = parseInt(core.getInput('limit') || '0', 10)
+    const outputFields = core.getInput('output-fields')
+    const selectKeys = core.getInput('select-keys')
+
+    const keySelections = parseSelectKeys(selectKeys)
+    const fieldsToOutput = outputFields
+      ? outputFields.split(',').map((f) => f.trim())
+      : null
 
     let rawData
     if (input) {
@@ -43,12 +80,28 @@ export async function run() {
     }
 
     const decoded = limitedRows.map((row) => {
-      const result = { ...row }
+      let result = { ...row }
+
       for (const field of fields) {
         if (result[field]) {
           result[field] = decodeBase64Url(result[field])
         }
       }
+
+      for (const [field, keys] of Object.entries(keySelections)) {
+        if (result[field]) {
+          result[field] = extractKeys(result[field], keys)
+        }
+      }
+
+      if (fieldsToOutput) {
+        const filtered = {}
+        for (const f of fieldsToOutput) {
+          if (f in result) filtered[f] = result[f]
+        }
+        result = filtered
+      }
+
       return result
     })
 
