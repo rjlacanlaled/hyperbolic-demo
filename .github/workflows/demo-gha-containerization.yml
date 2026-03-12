@@ -120,19 +120,21 @@ jobs:
         id: decode
         uses: w3-io/demo-gha-containerization-1/base64-decode@main
         with:
-          input-file: ${{ steps.query.outputs.response-file }}
+          input: ${{ steps.query.outputs.response }}
           fields: TOP_LEVEL_HEADERS,BODY_PLAIN_TEXT
           limit: ${{ inputs.limit }}
 
       - name: Format email list
         id: format
+        env:
+          DECODED_RESULT: ${{ steps.decode.outputs.result }}
         run: |
-          summary=$(jq -r '
+          summary=$(echo "$DECODED_RESULT" | jq -r '
             [.[] |
               (.TOP_LEVEL_HEADERS | fromjson | map(select(.name == "From" or .name == "Subject")) | from_entries) as $headers |
               "From: \($headers.From // "unknown")\nSubject: \($headers.Subject // "no subject")\nBody: \(.BODY_PLAIN_TEXT // "empty")\n---"
             ] | join("\n")
-          ' "${{ steps.decode.outputs.result-file }}")
+          ')
           {
             echo "email-summary<<SUMMARY_EOF"
             echo "$summary"

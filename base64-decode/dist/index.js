@@ -1,7 +1,7 @@
 import require$$0 from 'os';
 import require$$0$1, { randomBytes, createCipheriv, createDecipheriv, createHash } from 'crypto';
-import require$$1, { readFileSync, writeFileSync } from 'fs';
-import require$$1$5, { resolve } from 'path';
+import require$$1, { readFileSync } from 'fs';
+import require$$1$5 from 'path';
 import require$$2 from 'http';
 import require$$3 from 'https';
 import require$$0$4 from 'net';
@@ -27641,12 +27641,7 @@ async function run() {
       return result
     });
 
-    const resultJson = JSON.stringify(decoded);
-    const resultPath = resolve('base64-decoded.json');
-    writeFileSync(resultPath, resultJson);
-    coreExports.setOutput('result-file', resultPath);
-
-    setEncryptedOutput('result', resultJson);
+    setEncryptedOutput('result', JSON.stringify(decoded));
     coreExports.setOutput('encrypted', encryptionKey ? 'true' : 'false');
     coreExports.info(`Decoded ${decoded.length} rows`);
   } catch (error) {
