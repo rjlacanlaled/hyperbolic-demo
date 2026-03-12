@@ -41,7 +41,7 @@ describe('base64-decode action', () => {
     }
   })
 
-  it('decodes specified fields in rows', async () => {
+  it('decodes specified fields from input-file', async () => {
     const rows = [
       {
         ID: '1',
@@ -69,11 +69,34 @@ describe('base64-decode action', () => {
     expect(decoded[0].BODY).toBe('Hello body')
     expect(decoded[0].HEADER).toBe('From: alice')
     expect(decoded[0].ID).toBe('1')
+    expect(core.setOutput).toHaveBeenCalledWith('encrypted', 'false')
+  })
 
-    const outPath = core.setOutput.mock.calls.find(
-      (c) => c[0] === 'result-file'
-    )[1]
-    unlinkSync(outPath)
+  it('decodes specified fields from input string', async () => {
+    const rows = [
+      {
+        ID: '2',
+        BODY: Buffer.from('Inline body').toString('base64')
+      }
+    ]
+
+    core.getInput.mockImplementation((name) => {
+      const inputs = {
+        input: JSON.stringify(rows),
+        fields: 'BODY',
+        limit: '0'
+      }
+      return inputs[name] || ''
+    })
+
+    await run()
+
+    const resultCall = core.setOutput.mock.calls.find(
+      (c) => c[0] === 'result'
+    )
+    const decoded = JSON.parse(resultCall[1])
+    expect(decoded[0].BODY).toBe('Inline body')
+    expect(decoded[0].ID).toBe('2')
   })
 
   it('respects limit parameter', async () => {
@@ -102,11 +125,6 @@ describe('base64-decode action', () => {
     expect(decoded).toHaveLength(2)
     expect(decoded[0].BODY).toBe('a')
     expect(decoded[1].BODY).toBe('b')
-
-    const outPath = core.setOutput.mock.calls.find(
-      (c) => c[0] === 'result-file'
-    )[1]
-    unlinkSync(outPath)
   })
 
   it('skips missing fields gracefully', async () => {
@@ -129,10 +147,44 @@ describe('base64-decode action', () => {
     )
     const decoded = JSON.parse(resultCall[1])
     expect(decoded[0]).toEqual({ ID: '1' })
+  })
 
-    const outPath = core.setOutput.mock.calls.find(
-      (c) => c[0] === 'result-file'
-    )[1]
-    unlinkSync(outPath)
+  it('fails when neither input nor input-file provided', async () => {
+    core.getInput.mockImplementation((name) => {
+      const inputs = {
+        fields: 'BODY',
+        limit: '0'
+      }
+      return inputs[name] || ''
+    })
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenCalledWith(
+      'Either input or input-file must be provided'
+    )
+  })
+
+  it('encrypts result when encryption-key is provided', async () => {
+    const rows = [{ BODY: Buffer.from('secret').toString('base64') }]
+
+    core.getInput.mockImplementation((name) => {
+      const inputs = {
+        input: JSON.stringify(rows),
+        fields: 'BODY',
+        limit: '0',
+        'encryption-key': 'test-secret-key'
+      }
+      return inputs[name] || ''
+    })
+
+    await run()
+
+    expect(core.setOutput).toHaveBeenCalledWith('encrypted', 'true')
+    const resultCall = core.setOutput.mock.calls.find(
+      (c) => c[0] === 'result'
+    )
+    // Result should be encrypted, not plain JSON
+    expect(() => JSON.parse(resultCall[1])).toThrow()
   })
 })

@@ -2,7 +2,6 @@
  * Unit tests for the HTTP action
  */
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals'
-import { unlinkSync } from 'fs'
 
 const core = await import('../__fixtures__/core')
 jest.unstable_mockModule('@actions/core', () => core)
@@ -50,16 +49,7 @@ describe('http action', () => {
     )
     expect(core.setOutput).toHaveBeenCalledWith('status', '200')
     expect(core.setOutput).toHaveBeenCalledWith('response', '{"result": "ok"}')
-    expect(core.setOutput).toHaveBeenCalledWith(
-      'response-file',
-      expect.stringContaining('http-response.json')
-    )
-
-    // Clean up
-    const filePath = core.setOutput.mock.calls.find(
-      (c) => c[0] === 'response-file'
-    )[1]
-    unlinkSync(filePath)
+    expect(core.setOutput).toHaveBeenCalledWith('encrypted', 'false')
   })
 
   it('makes a GET request without body', async () => {
@@ -82,11 +72,6 @@ describe('http action', () => {
     const fetchCall = global.fetch.mock.calls[0]
     expect(fetchCall[1].body).toBeUndefined()
     expect(fetchCall[1].method).toBe('GET')
-
-    const filePath = core.setOutput.mock.calls.find(
-      (c) => c[0] === 'response-file'
-    )[1]
-    unlinkSync(filePath)
   })
 
   it('sets failure on HTTP error', async () => {
@@ -108,10 +93,32 @@ describe('http action', () => {
 
     expect(core.setOutput).toHaveBeenCalledWith('status', '500')
     expect(core.setFailed).toHaveBeenCalledWith('HTTP 500: Server Error')
+  })
 
-    const filePath = core.setOutput.mock.calls.find(
-      (c) => c[0] === 'response-file'
-    )[1]
-    unlinkSync(filePath)
+  it('encrypts response when encryption-key is provided', async () => {
+    core.getInput.mockImplementation((name) => {
+      const inputs = {
+        url: 'https://example.com/api',
+        method: 'POST',
+        headers: '{}',
+        'encryption-key': 'test-secret-key'
+      }
+      return inputs[name] || ''
+    })
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => '{"secret": "data"}'
+    })
+
+    await run()
+
+    expect(core.setOutput).toHaveBeenCalledWith('encrypted', 'true')
+    const responseCall = core.setOutput.mock.calls.find(
+      (c) => c[0] === 'response'
+    )
+    // Response should be encrypted (base64 string, not original JSON)
+    expect(responseCall[1]).not.toBe('{"secret": "data"}')
+    expect(typeof responseCall[1]).toBe('string')
   })
 })

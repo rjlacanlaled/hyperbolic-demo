@@ -1,7 +1,7 @@
 import require$$0 from 'os';
-import require$$0$1 from 'crypto';
-import require$$1, { readFileSync, writeFileSync } from 'fs';
-import require$$1$5, { resolve } from 'path';
+import require$$0$1, { randomBytes, createCipheriv, createDecipheriv, createHash } from 'crypto';
+import require$$1, { readFileSync } from 'fs';
+import require$$1$5 from 'path';
 import require$$2 from 'http';
 import require$$3 from 'https';
 import require$$0$4 from 'net';
@@ -28,9 +28,28 @@ import require$$0$9 from 'diagnostics_channel';
 import require$$2$2 from 'child_process';
 import require$$6$1 from 'timers';
 
+function _mergeNamespaces(n, m) {
+	m.forEach(function (e) {
+		e && typeof e !== 'string' && !Array.isArray(e) && Object.keys(e).forEach(function (k) {
+			if (k !== 'default' && !(k in n)) {
+				var d = Object.getOwnPropertyDescriptor(e, k);
+				Object.defineProperty(n, k, d.get ? d : {
+					enumerable: true,
+					get: function () { return e[k]; }
+				});
+			}
+		});
+	});
+	return Object.freeze(n);
+}
+
 var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
 
-var core = {};
+function getDefaultExportFromCjs (x) {
+	return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, 'default') ? x['default'] : x;
+}
+
+var core$2 = {};
 
 var command = {};
 
@@ -27105,10 +27124,10 @@ function requirePlatform () {
 var hasRequiredCore;
 
 function requireCore () {
-	if (hasRequiredCore) return core;
+	if (hasRequiredCore) return core$2;
 	hasRequiredCore = 1;
 	(function (exports$1) {
-		var __createBinding = (core && core.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+		var __createBinding = (core$2 && core$2.__createBinding) || (Object.create ? (function(o, m, k, k2) {
 		    if (k2 === undefined) k2 = k;
 		    var desc = Object.getOwnPropertyDescriptor(m, k);
 		    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
@@ -27119,12 +27138,12 @@ function requireCore () {
 		    if (k2 === undefined) k2 = k;
 		    o[k2] = m[k];
 		}));
-		var __setModuleDefault = (core && core.__setModuleDefault) || (Object.create ? (function(o, v) {
+		var __setModuleDefault = (core$2 && core$2.__setModuleDefault) || (Object.create ? (function(o, v) {
 		    Object.defineProperty(o, "default", { enumerable: true, value: v });
 		}) : function(o, v) {
 		    o["default"] = v;
 		});
-		var __importStar = (core && core.__importStar) || (function () {
+		var __importStar = (core$2 && core$2.__importStar) || (function () {
 		    var ownKeys = function(o) {
 		        ownKeys = Object.getOwnPropertyNames || function (o) {
 		            var ar = [];
@@ -27141,7 +27160,7 @@ function requireCore () {
 		        return result;
 		    };
 		})();
-		var __awaiter = (core && core.__awaiter) || function (thisArg, _arguments, P, generator) {
+		var __awaiter = (core$2 && core$2.__awaiter) || function (thisArg, _arguments, P, generator) {
 		    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
 		    return new (P || (P = Promise))(function (resolve, reject) {
 		        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -27486,11 +27505,92 @@ function requireCore () {
 		 */
 		exports$1.platform = __importStar(requirePlatform());
 		
-	} (core));
-	return core;
+	} (core$2));
+	return core$2;
 }
 
 var coreExports = requireCore();
+var core = /*@__PURE__*/getDefaultExportFromCjs(coreExports);
+
+var core$1 = /*#__PURE__*/_mergeNamespaces({
+	__proto__: null,
+	default: core
+}, [coreExports]);
+
+/**
+ * Derive a 32-byte key from a passphrase using SHA-256.
+ */
+function deriveKey(passphrase) {
+  return createHash('sha256').update(passphrase).digest()
+}
+
+/**
+ * Encrypt a string using AES-256-GCM.
+ * Returns base64(iv + authTag + ciphertext).
+ */
+function encryptValue(plaintext, key) {
+  const keyHash = deriveKey(key);
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', keyHash, iv);
+
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, 'utf-8'),
+    cipher.final()
+  ]);
+  const tag = cipher.getAuthTag();
+
+  return Buffer.concat([iv, tag, encrypted]).toString('base64')
+}
+
+/**
+ * Decrypt an AES-256-GCM ciphertext.
+ * Expects base64(iv + authTag + ciphertext).
+ */
+function decryptValue(ciphertext, key) {
+  const keyHash = deriveKey(key);
+  const buf = Buffer.from(ciphertext, 'base64');
+
+  const iv = buf.subarray(0, 12);
+  const tag = buf.subarray(12, 28);
+  const encrypted = buf.subarray(28);
+
+  const decipher = createDecipheriv('aes-256-gcm', keyHash, iv);
+  decipher.setAuthTag(tag);
+
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString(
+    'utf-8'
+  )
+}
+
+/**
+ * Returns a function that wraps core.setOutput with encryption.
+ * If encryptionKey is provided, values are encrypted automatically.
+ */
+function createEncryptedOutput(core, encryptionKey) {
+  return (name, value) => {
+    if (encryptionKey) {
+      core.setOutput(name, encryptValue(value, encryptionKey));
+    } else {
+      core.setOutput(name, value);
+    }
+  }
+}
+
+/**
+ * Decrypt specified inputs in place.
+ * Returns the decrypted value for a given input name.
+ */
+function decryptInput(core, encryptionKey, encryptedInputs, name) {
+  const fieldsToDecrypt = encryptedInputs
+    ? encryptedInputs.split(',').map((f) => f.trim())
+    : [];
+
+  const value = core.getInput(name);
+  if (encryptionKey && fieldsToDecrypt.includes(name) && value) {
+    return decryptValue(value, encryptionKey)
+  }
+  return value
+}
 
 /**
  * Decode a base64url-encoded string to UTF-8.
@@ -27502,14 +27602,29 @@ function decodeBase64Url(str) {
 
 async function run() {
   try {
-    const inputFile = coreExports.getInput('input-file', { required: true });
+    const encryptionKey = coreExports.getInput('encryption-key');
+    const encryptedInputs = coreExports.getInput('encrypted-inputs');
+
+    const setEncryptedOutput = createEncryptedOutput(core$1, encryptionKey);
+
+    const inputFile = coreExports.getInput('input-file');
+    const input = decryptInput(core$1, encryptionKey, encryptedInputs, 'input');
     const fields = coreExports.getInput('fields', { required: true })
       .split(',')
       .map((f) => f.trim());
     const limit = parseInt(coreExports.getInput('limit') || '0', 10);
 
-    coreExports.info(`Reading ${inputFile}`);
-    const rows = JSON.parse(readFileSync(inputFile, 'utf-8'));
+    let rawData;
+    if (input) {
+      rawData = input;
+    } else if (inputFile) {
+      coreExports.info(`Reading ${inputFile}`);
+      rawData = readFileSync(inputFile, 'utf-8');
+    } else {
+      throw new Error('Either input or input-file must be provided')
+    }
+
+    const rows = JSON.parse(rawData);
 
     const limitedRows = limit > 0 ? rows.slice(0, limit) : rows;
     if (limit > 0 && rows.length > limit) {
@@ -27526,11 +27641,8 @@ async function run() {
       return result
     });
 
-    const resultPath = resolve('base64-decoded.json');
-    writeFileSync(resultPath, JSON.stringify(decoded));
-
-    coreExports.setOutput('result-file', resultPath);
-    coreExports.setOutput('result', JSON.stringify(decoded));
+    setEncryptedOutput('result', JSON.stringify(decoded));
+    coreExports.setOutput('encrypted', encryptionKey ? 'true' : 'false');
     coreExports.info(`Decoded ${decoded.length} rows`);
   } catch (error) {
     coreExports.error(error.stack || error.toString());

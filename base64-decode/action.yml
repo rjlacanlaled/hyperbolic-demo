@@ -3,9 +3,12 @@ description: Decode base64url-encoded fields in JSON data
 author: GitHub Actions
 
 inputs:
+  input:
+    description: JSON string (array of objects) to decode
+    required: false
   input-file:
-    description: Path to JSON file (array of objects)
-    required: true
+    description: Path to JSON file (array of objects) - alternative to input
+    required: false
   fields:
     description: Comma-separated field names to decode
     required: true
@@ -13,12 +16,18 @@ inputs:
     description: Maximum number of rows to process (0 for no limit)
     required: false
     default: '0'
+  encryption-key:
+    description: AES-256-GCM key for encrypting outputs and decrypting inputs
+    required: false
+  encrypted-inputs:
+    description: Comma-separated input names to decrypt before use
+    required: false
 
 outputs:
-  result-file:
-    description: Path to decoded JSON result file
   result:
-    description: Decoded JSON string
+    description: Decoded JSON string (encrypted if encryption-key provided)
+  encrypted:
+    description: Whether result output is encrypted (true/false)
 
 runs:
   using: node24

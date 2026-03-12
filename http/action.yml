@@ -18,14 +18,20 @@ inputs:
     description: Request body string
     required: false
     default: ''
+  encryption-key:
+    description: AES-256-GCM key for encrypting outputs and decrypting inputs
+    required: false
+  encrypted-inputs:
+    description: Comma-separated input names to decrypt before use
+    required: false
 
 outputs:
   response:
-    description: Response body as string
-  response-file:
-    description: Path to file containing the response body
+    description: Response body as string (encrypted if encryption-key provided)
   status:
     description: HTTP status code
+  encrypted:
+    description: Whether response output is encrypted (true/false)
 
 runs:
   using: node24
