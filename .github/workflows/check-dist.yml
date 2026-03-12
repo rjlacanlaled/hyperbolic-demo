@@ -1,11 +1,8 @@
-# In JavaScript actions, `dist/` is a special directory. When you reference
-# an action with the `uses:` property, `dist/index.js` is the code that will be
-# run. For this project, the `dist/index.js` file is transpiled from other
-# source files. This workflow ensures the `dist/` directory contains the
-# expected transpiled code.
+# Each action subdirectory (hyperbolic/, sxt/) has its own `dist/` directory.
+# This workflow ensures those directories contain the expected transpiled code.
 #
 # If this workflow is run from a feature branch, it will act as an additional CI
-# check and fail if the checked-in `dist/` directory does not match what is
+# check and fail if the checked-in dist directories do not match what is
 # expected from the build.
 name: Check Transpiled JavaScript
 
@@ -26,12 +23,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout the repository.
       - name: Checkout
         id: checkout
         uses: actions/checkout@v6
 
-      # Setup Node.js using the version specified in `.node-version`.
       - name: Setup Node.js
         id: setup-node
         uses: actions/setup-node@v6
@@ -39,42 +34,40 @@ jobs:
           node-version-file: .node-version
           cache: npm
 
-      - name: Remove dist/ Directory
+      - name: Remove dist/ Directories
         id: remove-dist
-        run: npx rimraf ./dist
+        run: npx rimraf ./hyperbolic/dist ./sxt/dist
 
-      # Install dependencies using `npm ci`.
       - name: Install Dependencies
         id: install
         run: npm ci
 
-      # Build the `dist/` directory.
-      - name: Build dist/ Directory
+      - name: Build dist/ Directories
         id: build
         run: npm run bundle
 
-      # This will fail the workflow if the `dist/` directory is different than
-      # expected.
       - name: Compare Directories
         id: diff
         run: |
-          if [ ! -d dist/ ]; then
-            echo "Expected dist/ directory does not exist.  See status below:"
-            ls -la ./
-            exit 1
-          fi
-          if [ "$(git diff --ignore-space-at-eol --text dist/ | wc -l)" -gt "0" ]; then
-            echo "Detected uncommitted changes after build. See status below:"
-            git diff --ignore-space-at-eol --text dist/
-            exit 1
-          fi
+          for dir in hyperbolic/dist sxt/dist; do
+            if [ ! -d "$dir" ]; then
+              echo "Expected $dir directory does not exist. See status below:"
+              ls -la ./
+              exit 1
+            fi
+            if [ "$(git diff --ignore-space-at-eol --text "$dir" | wc -l)" -gt "0" ]; then
+              echo "Detected uncommitted changes in $dir after build. See status below:"
+              git diff --ignore-space-at-eol --text "$dir"
+              exit 1
+            fi
+          done
 
-      # If `dist/` was different than expected, upload the expected version as a
-      # workflow artifact.
       - if: ${{ failure() && steps.diff.outcome == 'failure' }}
         name: Upload Artifact
         id: upload
         uses: actions/upload-artifact@v6
         with:
           name: dist
-          path: dist/
+          path: |
+            hyperbolic/dist/
+            sxt/dist/

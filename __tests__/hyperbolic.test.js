@@ -6,7 +6,7 @@ const core = await import('../__fixtures__/core')
 
 jest.unstable_mockModule('@actions/core', () => core)
 
-const main = await import('../src/main')
+const main = await import('../src/hyperbolic/main')
 
 const makeSuccessResponse = (content, reasoningContent = null) => ({
   ok: true,

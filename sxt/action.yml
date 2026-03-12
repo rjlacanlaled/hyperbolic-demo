@@ -1,0 +1,38 @@
+name: SxT Query
+description: Fetch and decode data from Space and Time (SxT)
+author: GitHub Actions
+
+inputs:
+  sxt-user-id:
+    description: SxT user ID for authentication
+    required: true
+  sxt-password:
+    description: SxT password for authentication
+    required: true
+  biscuit-name:
+    description: Name of the generated biscuit to retrieve
+    required: true
+  sql-query:
+    description: SQL query to execute (use {userId} as placeholder)
+    required: true
+    default: >-
+      SELECT m.*, c.* FROM DEALSYNC_STG_V1.EMAIL_METADATA m
+      JOIN DEALSYNC_STG_V1.EMAIL_CONTENTS c
+      ON m.ID = c.EMAIL_METADATA_ID
+      WHERE m.USER_ID = '{userId}' LIMIT 200
+  resources:
+    description: Comma-separated list of SxT resources
+    required: true
+  user-id:
+    description: User ID to substitute into the SQL query
+    required: true
+
+outputs:
+  result:
+    description: Raw JSON query result
+  decoded-result:
+    description: JSON query result with base64url fields decoded
+
+runs:
+  using: node24
+  main: dist/index.js

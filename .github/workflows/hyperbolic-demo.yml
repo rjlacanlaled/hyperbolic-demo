@@ -4,9 +4,30 @@ on:
   workflow_dispatch:
     inputs:
       prompt:
-        description: The prompt to send to Hyperbolic AI
-        required: true
-        default: 'What can I do in SF?'
+        description: Summary prompt for the AI
+        required: false
+        default: >-
+          Summarize the following emails. For each email, list the sender,
+          subject, and a brief summary of the body.
+        type: string
+      sql-query:
+        description: SQL query for SxT (use {userId} placeholder)
+        required: false
+        default: >-
+          SELECT m.*, c.* FROM DEALSYNC_STG_V1.EMAIL_METADATA m
+          JOIN DEALSYNC_STG_V1.EMAIL_CONTENTS c
+          ON m.ID = c.EMAIL_METADATA_ID
+          WHERE m.USER_ID = '{userId}' LIMIT 200
+        type: string
+      resources:
+        description: Comma-separated SxT resources
+        required: false
+        default: 'DEALSYNC_STG_V1.EMAIL_METADATA,DEALSYNC_STG_V1.EMAIL_CONTENTS'
+        type: string
+      user-id:
+        description: User ID to substitute into the SQL query
+        required: false
+        default: ''
         type: string
       model:
         description: Primary model
@@ -39,39 +60,76 @@ permissions:
   contents: read
 
 jobs:
-  run-prompt:
-    name: Run Prompt
+  fetch-emails:
+    name: Fetch Emails from SxT
     runs-on: ubuntu-latest
+    outputs:
+      email-summary: ${{ steps.format.outputs.email-summary }}
 
     steps:
-      # Step 1: Try primary model
+      - name: Fetch email data from SxT
+        id: sxt
+        uses: rjlacanlaled/hyperbolic-demo/sxt@main
+        with:
+          sxt-user-id: ${{ secrets.W3_SECRET_DEMO_SXT_USER_ID }}
+          sxt-password: ${{ secrets.W3_SECRET_DEMO_SXT_PASSWORD }}
+          biscuit-name: ${{ secrets.W3_SECRET_DEMO_SXT_BISCUIT_NAME }}
+          sql-query: ${{ inputs.sql-query }}
+          resources: ${{ inputs.resources }}
+          user-id: ${{ inputs.user-id }}
+
+      - name: Format email list
+        id: format
+        env:
+          DECODED_RESULT: ${{ steps.sxt.outputs.decoded-result }}
+        run: |
+          summary=$(echo "$DECODED_RESULT" | jq -r '
+            [.[] | "From: \(.FROM_ADDRESS // "unknown")\nSubject: \(.SUBJECT // "no subject")\nBody: \(.BODY_PLAIN_TEXT // "empty")\n---"]
+            | join("\n")
+          ')
+          {
+            echo "email-summary<<SUMMARY_EOF"
+            echo "$summary"
+            echo "SUMMARY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  summarize:
+    name: Summarize with AI
+    runs-on: ubuntu-latest
+    needs: fetch-emails
+
+    steps:
       - name: Run Primary Model
         id: primary
-        uses: rjlacanlaled/hyperbolic-demo@main
+        uses: rjlacanlaled/hyperbolic-demo/hyperbolic@main
         continue-on-error: true
         with:
           api-key: ${{ secrets.W3_SECRET_DEMO_HYPERBOLIC_API_KEY }}
-          prompt: ${{ inputs.prompt }}
+          prompt: |
+            ${{ inputs.prompt }}
+
+            ${{ needs.fetch-emails.outputs.email-summary }}
           model: ${{ inputs.model }}
           max-tokens: ${{ inputs.max-tokens }}
           temperature: ${{ inputs.temperature }}
           top-p: ${{ inputs.top-p }}
 
-      # Step 2: Fallback model if primary failed
       - name: Run Fallback Model
         id: fallback
         if: steps.primary.outcome == 'failure'
-        uses: rjlacanlaled/hyperbolic-demo@main
+        uses: rjlacanlaled/hyperbolic-demo/hyperbolic@main
         continue-on-error: true
         with:
           api-key: ${{ secrets.W3_SECRET_DEMO_HYPERBOLIC_API_KEY }}
-          prompt: ${{ inputs.prompt }}
+          prompt: |
+            ${{ inputs.prompt }}
+
+            ${{ needs.fetch-emails.outputs.email-summary }}
           model: ${{ inputs.fallback-model }}
           max-tokens: ${{ inputs.max-tokens }}
           temperature: ${{ inputs.temperature }}
           top-p: ${{ inputs.top-p }}
 
-      # Step 3: Log output
       - name: Log Output
         env:
           PRIMARY_RESPONSE: ${{ steps.primary.outputs.response }}
