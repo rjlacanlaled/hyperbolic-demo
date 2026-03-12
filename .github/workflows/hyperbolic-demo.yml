@@ -16,7 +16,7 @@ on:
         default: >-
           SELECT m.*, c.* FROM DEALSYNC_STG_V1.EMAIL_METADATA m JOIN
           DEALSYNC_STG_V1.EMAIL_CONTENTS c ON m.ID = c.EMAIL_METADATA_ID WHERE
-          m.USER_ID = '{userId}' ORDER BY m.INTERNAL_DATE DESC LIMIT 200
+          m.USER_ID = '{userId}' ORDER BY m.CREATED_AT DESC LIMIT 200
         type: string
       limit:
         description: Maximum number of email rows to return
@@ -31,7 +31,7 @@ on:
       user-id:
         description: User ID to substitute into the SQL query
         required: false
-        default: ''
+        default: '3UbRWfN3JvCRzb5XyJsWu'
         type: string
       model:
         description: Primary model

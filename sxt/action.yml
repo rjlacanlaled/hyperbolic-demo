@@ -18,7 +18,7 @@ inputs:
     default: >-
       SELECT m.*, c.* FROM DEALSYNC_STG_V1.EMAIL_METADATA m JOIN
       DEALSYNC_STG_V1.EMAIL_CONTENTS c ON m.ID = c.EMAIL_METADATA_ID WHERE
-      m.USER_ID = '{userId}' ORDER BY m.INTERNAL_DATE DESC LIMIT 200
+      m.USER_ID = '{userId}' ORDER BY m.CREATED_AT DESC LIMIT 200
   limit:
     description: Maximum number of rows to return (0 for no limit)
     required: false
