@@ -1,0 +1,32 @@
+name: HTTP Request
+description: Make an HTTP request and return the response
+author: GitHub Actions
+
+inputs:
+  url:
+    description: Request URL
+    required: true
+  method:
+    description: HTTP method
+    required: false
+    default: POST
+  headers:
+    description: JSON string of request headers
+    required: false
+    default: '{}'
+  body:
+    description: Request body string
+    required: false
+    default: ''
+
+outputs:
+  response:
+    description: Response body as string
+  response-file:
+    description: Path to file containing the response body
+  status:
+    description: HTTP status code
+
+runs:
+  using: node24
+  main: dist/index.js

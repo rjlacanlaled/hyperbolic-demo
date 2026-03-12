@@ -12,17 +12,13 @@ const shared = {
   plugins: [commonjs(), nodeResolve({ preferBuiltins: true })]
 }
 
+function entry(input, output) {
+  return { ...shared, input, output: { ...shared.output, file: output } }
+}
+
 const config = [
-  {
-    ...shared,
-    input: 'src/hyperbolic/index.js',
-    output: { ...shared.output, file: 'hyperbolic/dist/index.js' }
-  },
-  {
-    ...shared,
-    input: 'src/sxt/index.js',
-    output: { ...shared.output, file: 'sxt/dist/index.js' }
-  }
+  entry('src/http/index.js', 'http/dist/index.js'),
+  entry('src/base64-decode/index.js', 'base64-decode/dist/index.js')
 ]
 
 export default config

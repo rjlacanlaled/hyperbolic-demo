@@ -1,0 +1,25 @@
+name: Base64 Decode
+description: Decode base64url-encoded fields in JSON data
+author: GitHub Actions
+
+inputs:
+  input-file:
+    description: Path to JSON file (array of objects)
+    required: true
+  fields:
+    description: Comma-separated field names to decode
+    required: true
+  limit:
+    description: Maximum number of rows to process (0 for no limit)
+    required: false
+    default: '0'
+
+outputs:
+  result-file:
+    description: Path to decoded JSON result file
+  result:
+    description: Decoded JSON string
+
+runs:
+  using: node24
+  main: dist/index.js

@@ -71,25 +71,72 @@ jobs:
       email-summary: ${{ steps.format.outputs.email-summary }}
 
     steps:
-      - name: Fetch email data from SxT
-        id: sxt
-        uses: rjlacanlaled/hyperbolic-demo/sxt@main
+      - name: Login to SxT
+        id: login
+        uses: rjlacanlaled/hyperbolic-demo/http@main
         with:
-          sxt-user-id: ${{ secrets.W3_SECRET_DEMO_SXT_USER_ID }}
-          sxt-password: ${{ secrets.W3_SECRET_DEMO_SXT_PASSWORD }}
-          biscuit-name: ${{ secrets.W3_SECRET_DEMO_SXT_BISCUIT_NAME }}
-          sql-query: ${{ inputs.sql-query }}
+          url: https://proxy.api.makeinfinite.dev/auth/login
+          method: POST
+          headers: '{"Content-Type": "application/json"}'
+          body: >-
+            {"userId": "${{ secrets.W3_SECRET_DEMO_SXT_USER_ID }}",
+             "password": "${{ secrets.W3_SECRET_DEMO_SXT_PASSWORD }}"}
+
+      - name: Fetch Biscuit
+        id: biscuit
+        uses: rjlacanlaled/hyperbolic-demo/http@main
+        with:
+          url: >-
+            https://proxy.api.makeinfinite.dev/biscuits/generated/${{ secrets.W3_SECRET_DEMO_SXT_BISCUIT_NAME }}
+          method: GET
+          headers: >-
+            {"sid": "${{ fromJSON(steps.login.outputs.response).sessionId }}"}
+
+      - name: Build query body
+        id: build-query
+        env:
+          SQL_QUERY: ${{ inputs.sql-query }}
+          USER_ID: ${{ inputs.user-id }}
+          BISCUIT: ${{ fromJSON(steps.biscuit.outputs.response).biscuit }}
+          RESOURCES: ${{ inputs.resources }}
+        run: |
+          RESOLVED_SQL=$(echo "$SQL_QUERY" | sed "s/{userId}/$USER_ID/g")
+          RESOURCES_JSON=$(echo "$RESOURCES" | jq -R 'split(",") | map(ltrimstr(" ") | rtrimstr(" "))')
+          BODY=$(jq -n \
+            --arg sql "$RESOLVED_SQL" \
+            --arg biscuit "$BISCUIT" \
+            --argjson resources "$RESOURCES_JSON" \
+            '{sqlText: $sql, biscuits: [$biscuit], resources: $resources}')
+          echo "body=$BODY" >> "$GITHUB_OUTPUT"
+
+      - name: Execute Query
+        id: query
+        uses: rjlacanlaled/hyperbolic-demo/http@main
+        with:
+          url: https://api.makeinfinite.dev/v1/sql
+          method: POST
+          headers: >-
+            {"Content-Type": "application/json",
+             "Authorization": "Bearer ${{ fromJSON(steps.login.outputs.response).accessToken }}"}
+          body: ${{ steps.build-query.outputs.body }}
+
+      - name: Decode Results
+        id: decode
+        uses: rjlacanlaled/hyperbolic-demo/base64-decode@main
+        with:
+          input-file: ${{ steps.query.outputs.response-file }}
+          fields: TOP_LEVEL_HEADERS,BODY_PLAIN_TEXT
           limit: ${{ inputs.limit }}
-          resources: ${{ inputs.resources }}
-          user-id: ${{ inputs.user-id }}
 
       - name: Format email list
         id: format
         run: |
           summary=$(jq -r '
-            [.[] | "From: \(.FROM // "unknown")\nSubject: \(.SUBJECT // "no subject")\nBody: \(.BODY // "empty")\n---"]
-            | join("\n")
-          ' "${{ steps.sxt.outputs.decoded-result-file }}")
+            [.[] |
+              (.TOP_LEVEL_HEADERS | fromjson | map(select(.name == "From" or .name == "Subject")) | from_entries) as $headers |
+              "From: \($headers.From // "unknown")\nSubject: \($headers.Subject // "no subject")\nBody: \(.BODY_PLAIN_TEXT // "empty")\n---"
+            ] | join("\n")
+          ' "${{ steps.decode.outputs.result-file }}")
           {
             echo "email-summary<<SUMMARY_EOF"
             echo "$summary"
@@ -102,48 +149,91 @@ jobs:
     needs: fetch-emails
 
     steps:
+      - name: Build AI request body
+        id: build-ai
+        env:
+          PROMPT: ${{ inputs.prompt }}
+          EMAIL_SUMMARY: ${{ needs.fetch-emails.outputs.email-summary }}
+          MODEL: ${{ inputs.model }}
+          MAX_TOKENS: ${{ inputs.max-tokens }}
+          TEMPERATURE: ${{ inputs.temperature }}
+          TOP_P: ${{ inputs.top-p }}
+        run: |
+          BODY=$(jq -n \
+            --arg model "$MODEL" \
+            --arg prompt "$PROMPT
+
+          $EMAIL_SUMMARY" \
+            --argjson max_tokens "${MAX_TOKENS}" \
+            --argjson temperature "${TEMPERATURE}" \
+            --argjson top_p "${TOP_P}" \
+            '{model: $model, messages: [{role: "user", content: $prompt}], max_tokens: $max_tokens, temperature: $temperature, top_p: $top_p, stream: false}')
+          echo "body<<BODY_EOF" >> "$GITHUB_OUTPUT"
+          echo "$BODY" >> "$GITHUB_OUTPUT"
+          echo "BODY_EOF" >> "$GITHUB_OUTPUT"
+
       - name: Run Primary Model
         id: primary
-        uses: rjlacanlaled/hyperbolic-demo/hyperbolic@main
+        uses: rjlacanlaled/hyperbolic-demo/http@main
         continue-on-error: true
         with:
-          api-key: ${{ secrets.W3_SECRET_DEMO_HYPERBOLIC_API_KEY }}
-          prompt: |
-            ${{ inputs.prompt }}
+          url: https://api.hyperbolic.xyz/v1/chat/completions
+          method: POST
+          headers: >-
+            {"Content-Type": "application/json",
+             "Authorization": "Bearer ${{ secrets.W3_SECRET_DEMO_HYPERBOLIC_API_KEY }}"}
+          body: ${{ steps.build-ai.outputs.body }}
 
-            ${{ needs.fetch-emails.outputs.email-summary }}
-          model: ${{ inputs.model }}
-          max-tokens: ${{ inputs.max-tokens }}
-          temperature: ${{ inputs.temperature }}
-          top-p: ${{ inputs.top-p }}
+      - name: Build fallback request body
+        id: build-fallback
+        if: steps.primary.outcome == 'failure'
+        env:
+          PROMPT: ${{ inputs.prompt }}
+          EMAIL_SUMMARY: ${{ needs.fetch-emails.outputs.email-summary }}
+          MODEL: ${{ inputs.fallback-model }}
+          MAX_TOKENS: ${{ inputs.max-tokens }}
+          TEMPERATURE: ${{ inputs.temperature }}
+          TOP_P: ${{ inputs.top-p }}
+        run: |
+          BODY=$(jq -n \
+            --arg model "$MODEL" \
+            --arg prompt "$PROMPT
+
+          $EMAIL_SUMMARY" \
+            --argjson max_tokens "${MAX_TOKENS}" \
+            --argjson temperature "${TEMPERATURE}" \
+            --argjson top_p "${TOP_P}" \
+            '{model: $model, messages: [{role: "user", content: $prompt}], max_tokens: $max_tokens, temperature: $temperature, top_p: $top_p, stream: false}')
+          echo "body<<BODY_EOF" >> "$GITHUB_OUTPUT"
+          echo "$BODY" >> "$GITHUB_OUTPUT"
+          echo "BODY_EOF" >> "$GITHUB_OUTPUT"
 
       - name: Run Fallback Model
         id: fallback
         if: steps.primary.outcome == 'failure'
-        uses: rjlacanlaled/hyperbolic-demo/hyperbolic@main
+        uses: rjlacanlaled/hyperbolic-demo/http@main
         continue-on-error: true
         with:
-          api-key: ${{ secrets.W3_SECRET_DEMO_HYPERBOLIC_API_KEY }}
-          prompt: |
-            ${{ inputs.prompt }}
-
-            ${{ needs.fetch-emails.outputs.email-summary }}
-          model: ${{ inputs.fallback-model }}
-          max-tokens: ${{ inputs.max-tokens }}
-          temperature: ${{ inputs.temperature }}
-          top-p: ${{ inputs.top-p }}
+          url: https://api.hyperbolic.xyz/v1/chat/completions
+          method: POST
+          headers: >-
+            {"Content-Type": "application/json",
+             "Authorization": "Bearer ${{ secrets.W3_SECRET_DEMO_HYPERBOLIC_API_KEY }}"}
+          body: ${{ steps.build-fallback.outputs.body }}
 
       - name: Log Output
         env:
           PRIMARY_RESPONSE: ${{ steps.primary.outputs.response }}
-          PRIMARY_REASONING: ${{ steps.primary.outputs.reasoning }}
           FALLBACK_RESPONSE: ${{ steps.fallback.outputs.response }}
-          FALLBACK_REASONING: ${{ steps.fallback.outputs.reasoning }}
         run: |
           echo "=== Primary Model ==="
-          echo "Reasoning: ${PRIMARY_REASONING:-none}"
-          echo "Response: ${PRIMARY_RESPONSE:-none}"
+          echo "$PRIMARY_RESPONSE" | jq -r '
+            "Reasoning: \(.choices[0].message.reasoning_content // "none")",
+            "Response: \(.choices[0].message.content // "none")"
+          ' 2>/dev/null || echo "Response: ${PRIMARY_RESPONSE:-none}"
           echo ""
           echo "=== Fallback Model ==="
-          echo "Reasoning: ${FALLBACK_REASONING:-none}"
-          echo "Response: ${FALLBACK_RESPONSE:-none}"
+          echo "$FALLBACK_RESPONSE" | jq -r '
+            "Reasoning: \(.choices[0].message.reasoning_content // "none")",
+            "Response: \(.choices[0].message.content // "none")"
+          ' 2>/dev/null || echo "Response: ${FALLBACK_RESPONSE:-none}"
