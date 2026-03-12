@@ -42,14 +42,9 @@ jobs:
 
       # Step 3: Log output regardless of success or failure
       - name: Log Output
-        if: always()
+        env:
+          PRIMARY_RESPONSE: ${{ steps.primary.outputs.response }}
+          FALLBACK_RESPONSE: ${{ steps.fallback.outputs.response }}
         run: |
-          if [ "${{ steps.primary.outcome }}" == "success" ]; then
-            echo "Primary model succeeded:"
-            echo "${{ steps.primary.outputs.response }}"
-          elif [ "${{ steps.fallback.outcome }}" == "success" ]; then
-            echo "Fallback model succeeded:"
-            echo "${{ steps.fallback.outputs.response }}"
-          else
-            echo "Both primary and fallback models failed."
-          fi
+          echo "Primary response: ${PRIMARY_RESPONSE:-none}"
+          echo "Fallback response: ${FALLBACK_RESPONSE:-none}"
