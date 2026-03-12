@@ -27592,6 +27592,44 @@ function decryptInput(core, encryptionKey, encryptedInputs, name) {
   return value
 }
 
+/**
+ * Decode a base64url-encoded string to UTF-8.
+ */
+function decodeBase64Url(str) {
+  const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  return Buffer.from(base64, 'base64').toString('utf-8')
+}
+
+/**
+ * Parse select-keys input: "FIELD:key1,key2;FIELD2:key3"
+ * Returns { FIELD: ['key1', 'key2'], FIELD2: ['key3'] }
+ */
+function parseSelectKeys(selectKeys) {
+  const result = {};
+  if (!selectKeys) return result
+  for (const part of selectKeys.split(';')) {
+    const colonIdx = part.indexOf(':');
+    if (colonIdx === -1) continue
+    const field = part.slice(0, colonIdx).trim();
+    const keys = part
+      .slice(colonIdx + 1)
+      .split(',')
+      .map((k) => k.trim());
+    result[field] = keys;
+  }
+  return result
+}
+
+/**
+ * Extract specific keys from a JSON array of {name, value} objects.
+ * Returns a flat object: { key1: val1, key2: val2 }
+ */
+function extractKeys(jsonString, keys) {
+  const arr = JSON.parse(jsonString);
+  const selected = arr.filter((item) => keys.includes(item.name));
+  return Object.fromEntries(selected.map((item) => [item.name, item.value]))
+}
+
 async function run() {
   try {
     const encryptionKey = coreExports.getInput('encryption-key');
@@ -27623,12 +27661,70 @@ async function run() {
     );
 
     coreExports.setOutput('status', response.status.toString());
-    setEncryptedOutput('response', responseBody);
-    coreExports.setOutput('encrypted', encryptionKey ? 'true' : 'false');
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${responseBody}`)
     }
+
+    // Optional post-processing for JSON array responses
+    const decodeFields = coreExports.getInput('decode-fields');
+    const outputFields = coreExports.getInput('output-fields');
+    const selectKeys = coreExports.getInput('select-keys');
+    const limit = parseInt(coreExports.getInput('limit') || '0', 10);
+
+    let processedOutput = responseBody;
+
+    if (decodeFields || outputFields || selectKeys || limit > 0) {
+      let rows = JSON.parse(responseBody);
+
+      if (limit > 0 && rows.length > limit) {
+        coreExports.info(`Limiting from ${rows.length} to ${limit} rows`);
+        rows = rows.slice(0, limit);
+      }
+
+      const fieldsToDecode = decodeFields
+        ? decodeFields.split(',').map((f) => f.trim())
+        : [];
+      const keySelections = parseSelectKeys(selectKeys);
+      const fieldsToOutput = outputFields
+        ? outputFields.split(',').map((f) => f.trim())
+        : null;
+
+      rows = rows.map((row) => {
+        let result = { ...row };
+
+        for (const field of fieldsToDecode) {
+          if (result[field]) {
+            result[field] = decodeBase64Url(result[field]);
+          }
+        }
+
+        for (const [field, keys] of Object.entries(keySelections)) {
+          if (result[field]) {
+            result[field] = extractKeys(result[field], keys);
+          }
+        }
+
+        if (fieldsToOutput) {
+          const filtered = {};
+          for (const f of fieldsToOutput) {
+            if (f in result) filtered[f] = result[f];
+          }
+          result = filtered;
+        }
+
+        return result
+      });
+
+      processedOutput = JSON.stringify(rows);
+      const outputBytes = Buffer.byteLength(processedOutput, 'utf-8');
+      coreExports.info(
+        `Processed: ${outputBytes} bytes (${(outputBytes / 1024).toFixed(1)} KB) | Rows: ${rows.length}`
+      );
+    }
+
+    setEncryptedOutput('response', processedOutput);
+    coreExports.setOutput('encrypted', encryptionKey ? 'true' : 'false');
   } catch (error) {
     coreExports.error(error.stack || error.toString());
     coreExports.setFailed(error.message);

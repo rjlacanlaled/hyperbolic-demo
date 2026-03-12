@@ -105,7 +105,7 @@ jobs:
             '{sqlText: $sql, biscuits: [$biscuit], resources: $resources}')
           echo "body=$BODY" >> "$GITHUB_OUTPUT"
 
-      - name: Execute Query
+      - name: Execute Query and Decode
         id: query
         uses: w3-io/demo-gha-containerization-1/http@main
         with:
@@ -115,23 +115,17 @@ jobs:
             {"Content-Type": "application/json",
              "Authorization": "Bearer ${{ fromJSON(steps.login.outputs.response).accessToken }}"}
           body: ${{ steps.build-query.outputs.body }}
-
-      - name: Decode Results
-        id: decode
-        uses: w3-io/demo-gha-containerization-1/base64-decode@main
-        with:
-          input: ${{ steps.query.outputs.response }}
-          fields: TOP_LEVEL_HEADERS,BODY_PLAIN_TEXT
-          limit: ${{ inputs.limit }}
+          decode-fields: TOP_LEVEL_HEADERS,BODY_PLAIN_TEXT
           output-fields: TOP_LEVEL_HEADERS,BODY_PLAIN_TEXT
           select-keys: 'TOP_LEVEL_HEADERS:From,Subject'
+          limit: ${{ inputs.limit }}
 
       - name: Format email list
         id: format
         env:
-          DECODED_RESULT: ${{ steps.decode.outputs.result }}
+          QUERY_RESULT: ${{ steps.query.outputs.response }}
         run: |
-          summary=$(echo "$DECODED_RESULT" | jq -r '
+          summary=$(echo "$QUERY_RESULT" | jq -r '
             [.[] |
               "From: \(.TOP_LEVEL_HEADERS.From // "unknown")\nSubject: \(.TOP_LEVEL_HEADERS.Subject // "no subject")\nBody: \(.BODY_PLAIN_TEXT // "empty")\n---"
             ] | join("\n")

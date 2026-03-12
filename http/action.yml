@@ -18,6 +18,21 @@ inputs:
     description: Request body string
     required: false
     default: ''
+  decode-fields:
+    description: Base64url-decode these fields in JSON array response
+    required: false
+  output-fields:
+    description: Keep only these fields in the output (comma-separated)
+    required: false
+  select-keys:
+    description: >-
+      Extract keys from decoded JSON arrays of {name, value} objects.
+      Format: FIELD:key1,key2;FIELD2:key3
+    required: false
+  limit:
+    description: Limit number of rows in JSON array response (0 for no limit)
+    required: false
+    default: '0'
   encryption-key:
     description: AES-256-GCM key for encrypting outputs and decrypting inputs
     required: false
