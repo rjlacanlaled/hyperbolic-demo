@@ -11,12 +11,12 @@ on:
       model:
         description: Primary model
         required: false
-        default: 'Qwen/Qwen3-Next-80B-A3B-Thinking'
+        default: 'deepseek-ai/DeepSeek-R1-0528'
         type: string
       fallback-model:
         description: Fallback model if primary fails
         required: false
-        default: 'meta-llama/Meta-Llama-3.1-70B-Instruct'
+        default: 'deepseek-ai/DeepSeek-R1'
         type: string
       max-tokens:
         description: Maximum tokens for the response
