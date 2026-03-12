@@ -102,7 +102,7 @@ jobs:
         run: |
           RESOLVED_SQL=$(echo "$SQL_QUERY" | sed "s/{userId}/$USER_ID/g")
           RESOURCES_JSON=$(echo "$RESOURCES" | jq -R 'split(",") | map(ltrimstr(" ") | rtrimstr(" "))')
-          BODY=$(jq -n \
+          BODY=$(jq -cn \
             --arg sql "$RESOLVED_SQL" \
             --arg biscuit "$BISCUIT" \
             --argjson resources "$RESOURCES_JSON" \
