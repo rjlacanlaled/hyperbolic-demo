@@ -1,7 +1,7 @@
 import require$$0 from 'os';
 import require$$0$1 from 'crypto';
-import require$$1 from 'fs';
-import require$$1$5 from 'path';
+import require$$1, { writeFileSync } from 'fs';
+import require$$1$5, { join } from 'path';
 import require$$2 from 'http';
 import require$$3 from 'https';
 import require$$0$4 from 'net';
@@ -27622,6 +27622,16 @@ async function run() {
 
     const decodedRows = decodeBase64UrlFields(limitedRows);
 
+    // Write results to files to avoid GitHub Actions env var size limits
+    const workspace = process.env.GITHUB_WORKSPACE || '.';
+    const resultPath = join(workspace, 'sxt-result.json');
+    const decodedPath = join(workspace, 'sxt-decoded-result.json');
+
+    writeFileSync(resultPath, JSON.stringify(limitedRows));
+    writeFileSync(decodedPath, JSON.stringify(decodedRows));
+
+    coreExports.setOutput('result-file', resultPath);
+    coreExports.setOutput('decoded-result-file', decodedPath);
     coreExports.setOutput('result', JSON.stringify(limitedRows));
     coreExports.setOutput('decoded-result', JSON.stringify(decodedRows));
   } catch (error) {

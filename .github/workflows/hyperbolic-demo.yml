@@ -14,9 +14,10 @@ on:
         description: SQL query for SxT (use {userId} placeholder)
         required: false
         default: >-
-          SELECT m.*, c.* FROM DEALSYNC_STG_V1.EMAIL_METADATA m JOIN
-          DEALSYNC_STG_V1.EMAIL_CONTENTS c ON m.ID = c.EMAIL_METADATA_ID WHERE
-          m.USER_ID = '{userId}' ORDER BY m.CREATED_AT DESC LIMIT 200
+          SELECT c.FROM_ADDRESS, c.SUBJECT, c.BODY_PLAIN_TEXT FROM
+          DEALSYNC_STG_V1.EMAIL_METADATA m JOIN DEALSYNC_STG_V1.EMAIL_CONTENTS c
+          ON m.ID = c.EMAIL_METADATA_ID WHERE m.USER_ID = '{userId}' ORDER BY
+          m.CREATED_AT DESC LIMIT 200
         type: string
       limit:
         description: Maximum number of email rows to return
@@ -85,13 +86,11 @@ jobs:
 
       - name: Format email list
         id: format
-        env:
-          DECODED_RESULT: ${{ steps.sxt.outputs.decoded-result }}
         run: |
-          summary=$(echo "$DECODED_RESULT" | jq -r '
+          summary=$(jq -r '
             [.[] | "From: \(.FROM_ADDRESS // "unknown")\nSubject: \(.SUBJECT // "no subject")\nBody: \(.BODY_PLAIN_TEXT // "empty")\n---"]
             | join("\n")
-          ')
+          ' "${{ steps.sxt.outputs.decoded-result-file }}")
           {
             echo "email-summary<<SUMMARY_EOF"
             echo "$summary"
