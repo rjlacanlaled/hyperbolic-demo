@@ -1,5 +1,6 @@
 import * as core from '@actions/core'
-import { readFileSync } from 'fs'
+import { readFileSync, writeFileSync } from 'fs'
+import { resolve } from 'path'
 import { createEncryptedOutput, decryptInput } from '../crypto.js'
 
 /**
@@ -52,7 +53,12 @@ export async function run() {
       return result
     })
 
-    setEncryptedOutput('result', JSON.stringify(decoded))
+    const resultJson = JSON.stringify(decoded)
+    const resultPath = resolve('base64-decoded.json')
+    writeFileSync(resultPath, resultJson)
+    core.setOutput('result-file', resultPath)
+
+    setEncryptedOutput('result', resultJson)
     core.setOutput('encrypted', encryptionKey ? 'true' : 'false')
     core.info(`Decoded ${decoded.length} rows`)
   } catch (error) {

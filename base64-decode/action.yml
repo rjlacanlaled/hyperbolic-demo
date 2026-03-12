@@ -26,6 +26,8 @@ inputs:
 outputs:
   result:
     description: Decoded JSON string (encrypted if encryption-key provided)
+  result-file:
+    description: Path to decoded JSON file (not encrypted)
   encrypted:
     description: Whether result output is encrypted (true/false)
 

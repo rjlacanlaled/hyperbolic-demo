@@ -1,7 +1,7 @@
 import require$$0 from 'os';
 import require$$0$1, { randomBytes, createCipheriv, createDecipheriv, createHash } from 'crypto';
-import require$$1 from 'fs';
-import require$$1$5 from 'path';
+import require$$1, { writeFileSync } from 'fs';
+import require$$1$5, { resolve } from 'path';
 import require$$2 from 'http';
 import require$$3 from 'https';
 import require$$0$4 from 'net';
@@ -27618,6 +27618,11 @@ async function run() {
     const responseBody = await response.text();
 
     coreExports.setOutput('status', response.status.toString());
+
+    const responsePath = resolve('http-response.json');
+    writeFileSync(responsePath, responseBody);
+    coreExports.setOutput('response-file', responsePath);
+
     setEncryptedOutput('response', responseBody);
     coreExports.setOutput('encrypted', encryptionKey ? 'true' : 'false');
 

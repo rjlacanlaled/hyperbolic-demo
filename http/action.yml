@@ -28,6 +28,8 @@ inputs:
 outputs:
   response:
     description: Response body as string (encrypted if encryption-key provided)
+  response-file:
+    description: Path to file containing the response body (not encrypted)
   status:
     description: HTTP status code
   encrypted:
