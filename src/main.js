@@ -2,16 +2,6 @@ import * as core from '@actions/core'
 
 const HYPERBOLIC_API_URL = 'https://api.hyperbolic.xyz/v1/chat/completions'
 
-function parseResponse(content) {
-  const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/)
-  if (thinkMatch) {
-    const reasoning = thinkMatch[1].trim()
-    const response = content.replace(/<think>[\s\S]*?<\/think>/, '').trim()
-    return { reasoning, response }
-  }
-  return { reasoning: '', response: content }
-}
-
 /**
  * The main function for the action.
  * @returns {Promise<void>} Resolves when the action is complete.
@@ -49,16 +39,17 @@ export async function run() {
     }
 
     const json = await response.json()
-    const rawContent = json.choices[0].message.content
-    const { reasoning, response: answer } = parseResponse(rawContent)
+    const message = json.choices[0].message
+    const content = message.content
+    const reasoning = message.reasoning_content
 
     if (reasoning) {
       core.info(`Reasoning: ${reasoning}`)
       core.setOutput('reasoning', reasoning)
     }
 
-    core.info(`Response: ${answer}`)
-    core.setOutput('response', answer)
+    core.info(`Response: ${content}`)
+    core.setOutput('response', content)
   } catch (error) {
     core.error(error.stack || error.toString())
     core.setFailed(error.message)

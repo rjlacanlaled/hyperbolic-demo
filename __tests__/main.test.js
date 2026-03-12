@@ -8,11 +8,18 @@ jest.unstable_mockModule('@actions/core', () => core)
 
 const main = await import('../src/main')
 
-const makeSuccessResponse = (content) => ({
+const makeSuccessResponse = (content, reasoningContent = null) => ({
   ok: true,
   status: 200,
   json: async () => ({
-    choices: [{ message: { content } }]
+    choices: [{
+      message: {
+        role: 'assistant',
+        content,
+        reasoning_content: reasoningContent,
+        tool_calls: null
+      }
+    }]
   })
 })
 
@@ -66,9 +73,10 @@ describe('action', () => {
     )
   })
 
-  it('separates reasoning from response', async () => {
-    const content = '<think>Let me think about this...</think>Here are things to do in SF.'
-    global.fetch.mockResolvedValueOnce(makeSuccessResponse(content))
+  it('separates reasoning_content from response', async () => {
+    global.fetch.mockResolvedValueOnce(
+      makeSuccessResponse('Here are things to do in SF.', 'Let me think about this...')
+    )
 
     await main.run()
 
@@ -76,8 +84,8 @@ describe('action', () => {
     expect(core.setOutput).toHaveBeenCalledWith('response', 'Here are things to do in SF.')
   })
 
-  it('handles response with no reasoning tags', async () => {
-    global.fetch.mockResolvedValueOnce(makeSuccessResponse('Plain response'))
+  it('handles response with no reasoning_content', async () => {
+    global.fetch.mockResolvedValueOnce(makeSuccessResponse('Plain response', null))
 
     await main.run()
 
