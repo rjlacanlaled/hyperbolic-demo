@@ -1,4 +1,4 @@
-name: Hyperbolic Demo Workflow
+name: Demo GHA Containerization
 
 on:
   workflow_dispatch:
