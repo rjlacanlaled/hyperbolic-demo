@@ -13,7 +13,7 @@ const core = await import('../__fixtures__/core')
 
 jest.unstable_mockModule('@actions/core', () => core)
 
-const { login, getBiscuit, executeQuery, decodeBase64UrlFields, run } =
+const { login, getBiscuit, executeQuery, decodeRows, decodeBase64Url, run } =
   await import('../src/sxt/main')
 
 describe('login', () => {
@@ -156,33 +156,41 @@ describe('executeQuery', () => {
   })
 })
 
-describe('decodeBase64UrlFields', () => {
-  it('decodes BODY_PLAIN_TEXT and BODY_HTML_TEXT fields', () => {
-    // "Hello World" in base64url
-    const base64url = Buffer.from('Hello World')
+describe('decodeBase64Url', () => {
+  it('decodes a base64url string', () => {
+    const encoded = Buffer.from('Hello World')
       .toString('base64')
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
+    expect(decodeBase64Url(encoded)).toBe('Hello World')
+  })
+})
 
-    const rows = [
-      { ID: '1', BODY_PLAIN_TEXT: base64url, BODY_HTML_TEXT: base64url }
-    ]
+describe('decodeRows', () => {
+  it('extracts From and Subject from headers and decodes body', () => {
+    const headers = JSON.stringify([
+      { name: 'From', value: 'Alice <alice@example.com>' },
+      { name: 'Subject', value: 'Test Email' }
+    ])
+    const encodedHeaders = Buffer.from(headers).toString('base64')
+    const encodedBody = Buffer.from('Hello body').toString('base64')
 
-    const decoded = decodeBase64UrlFields(rows)
+    const rows = [{ TOP_LEVEL_HEADERS: encodedHeaders, BODY_PLAIN_TEXT: encodedBody }]
+    const decoded = decodeRows(rows)
 
-    expect(decoded[0].BODY_PLAIN_TEXT).toBe('Hello World')
-    expect(decoded[0].BODY_HTML_TEXT).toBe('Hello World')
-    expect(decoded[0].ID).toBe('1')
+    expect(decoded[0].FROM).toBe('Alice <alice@example.com>')
+    expect(decoded[0].SUBJECT).toBe('Test Email')
+    expect(decoded[0].BODY).toBe('Hello body')
   })
 
-  it('handles rows without encoded fields', () => {
-    const rows = [{ ID: '1', SUBJECT: 'Test' }]
-    const decoded = decodeBase64UrlFields(rows)
-    expect(decoded).toEqual(rows)
+  it('handles rows without headers or body', () => {
+    const rows = [{ ID: '1' }]
+    const decoded = decodeRows(rows)
+    expect(decoded[0]).toEqual({ FROM: null, SUBJECT: null, BODY: null })
   })
 
   it('handles empty rows', () => {
-    expect(decodeBase64UrlFields([])).toEqual([])
+    expect(decodeRows([])).toEqual([])
   })
 })
 
@@ -223,10 +231,19 @@ describe('run', () => {
       ok: true,
       json: async () => ({ biscuit: 'b-token' })
     })
-    // executeQuery
+    // executeQuery — return a row with encoded headers and body
+    const headers = JSON.stringify([
+      { name: 'From', value: 'bob@test.com' },
+      { name: 'Subject', value: 'Hi' }
+    ])
+    const mockRow = {
+      ID: '1',
+      TOP_LEVEL_HEADERS: Buffer.from(headers).toString('base64'),
+      BODY_PLAIN_TEXT: Buffer.from('Hello').toString('base64')
+    }
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => [{ ID: '1', BODY_PLAIN_TEXT: 'SGVsbG8' }]
+      json: async () => [mockRow]
     })
 
     await run()
@@ -234,12 +251,16 @@ describe('run', () => {
     expect(global.fetch).toHaveBeenCalledTimes(3)
     expect(core.setOutput).toHaveBeenCalledWith(
       'result',
-      JSON.stringify([{ ID: '1', BODY_PLAIN_TEXT: 'SGVsbG8' }])
+      JSON.stringify([mockRow])
     )
-    expect(core.setOutput).toHaveBeenCalledWith(
-      'decoded-result',
-      expect.any(String)
+    // decoded-result should have parsed FROM/SUBJECT/BODY
+    const decodedCall = core.setOutput.mock.calls.find(
+      (c) => c[0] === 'decoded-result'
     )
+    const decoded = JSON.parse(decodedCall[1])
+    expect(decoded[0].FROM).toBe('bob@test.com')
+    expect(decoded[0].SUBJECT).toBe('Hi')
+    expect(decoded[0].BODY).toBe('Hello')
 
     // Verify the SQL query had {userId} substituted
     const queryCall = global.fetch.mock.calls[2]

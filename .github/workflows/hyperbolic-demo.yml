@@ -14,10 +14,9 @@ on:
         description: SQL query for SxT (use {userId} placeholder)
         required: false
         default: >-
-          SELECT c.FROM_ADDRESS, c.SUBJECT, c.BODY_PLAIN_TEXT FROM
-          DEALSYNC_STG_V1.EMAIL_METADATA m JOIN DEALSYNC_STG_V1.EMAIL_CONTENTS c
-          ON m.ID = c.EMAIL_METADATA_ID WHERE m.USER_ID = '{userId}' ORDER BY
-          m.CREATED_AT DESC LIMIT 200
+          SELECT m.*, c.* FROM DEALSYNC_STG_V1.EMAIL_METADATA m JOIN
+          DEALSYNC_STG_V1.EMAIL_CONTENTS c ON m.ID = c.EMAIL_METADATA_ID WHERE
+          m.USER_ID = '{userId}' ORDER BY m.CREATED_AT DESC LIMIT 200
         type: string
       limit:
         description: Maximum number of email rows to return
@@ -88,7 +87,7 @@ jobs:
         id: format
         run: |
           summary=$(jq -r '
-            [.[] | "From: \(.FROM_ADDRESS // "unknown")\nSubject: \(.SUBJECT // "no subject")\nBody: \(.BODY_PLAIN_TEXT // "empty")\n---"]
+            [.[] | "From: \(.FROM // "unknown")\nSubject: \(.SUBJECT // "no subject")\nBody: \(.BODY // "empty")\n---"]
             | join("\n")
           ' "${{ steps.sxt.outputs.decoded-result-file }}")
           {

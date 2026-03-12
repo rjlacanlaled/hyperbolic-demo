@@ -27562,21 +27562,47 @@ async function executeQuery(accessToken, sqlText, biscuits, resources) {
 }
 
 /**
- * Decode base64url-encoded fields (BODY_PLAIN_TEXT, BODY_HTML_TEXT) in query rows.
- * Gmail uses base64url encoding: `-` → `+`, `_` → `/`.
+ * Decode a base64url-encoded string to UTF-8.
  */
-function decodeBase64UrlFields(rows) {
-  const fieldsToEncode = ['BODY_PLAIN_TEXT', 'BODY_HTML_TEXT'];
+function decodeBase64Url(str) {
+  const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  return Buffer.from(base64, 'base64').toString('utf-8')
+}
 
+/**
+ * Extract a header value by name from decoded TOP_LEVEL_HEADERS JSON array.
+ */
+function getHeader(headers, name) {
+  const entry = headers.find(
+    (h) => h.name.toLowerCase() === name.toLowerCase()
+  );
+  return entry ? entry.value : null
+}
+
+/**
+ * Decode rows: parse TOP_LEVEL_HEADERS for From/Subject, decode body fields,
+ * and return only the fields needed for summarization.
+ */
+function decodeRows(rows) {
   return rows.map((row) => {
-    const decoded = { ...row };
-    for (const field of fieldsToEncode) {
-      if (decoded[field]) {
-        const base64 = decoded[field].replace(/-/g, '+').replace(/_/g, '/');
-        decoded[field] = Buffer.from(base64, 'base64').toString('utf-8');
+    let from = null;
+    let subject = null;
+
+    if (row.TOP_LEVEL_HEADERS) {
+      try {
+        const headers = JSON.parse(decodeBase64Url(row.TOP_LEVEL_HEADERS));
+        from = getHeader(headers, 'From');
+        subject = getHeader(headers, 'Subject');
+      } catch {
+        // If headers can't be parsed, leave as null
       }
     }
-    return decoded
+
+    const body = row.BODY_PLAIN_TEXT
+      ? decodeBase64Url(row.BODY_PLAIN_TEXT)
+      : null;
+
+    return { FROM: from, SUBJECT: subject, BODY: body }
   })
 }
 
@@ -27620,7 +27646,7 @@ async function run() {
       coreExports.info(`Limiting output to ${limit} rows`);
     }
 
-    const decodedRows = decodeBase64UrlFields(limitedRows);
+    const decodedRows = decodeRows(limitedRows);
 
     // Write results to files to avoid env var size limits
     const resultPath = resolve('sxt-result.json');

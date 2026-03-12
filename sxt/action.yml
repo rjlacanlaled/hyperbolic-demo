@@ -16,10 +16,9 @@ inputs:
     description: SQL query to execute (use {userId} as placeholder)
     required: true
     default: >-
-      SELECT c.FROM_ADDRESS, c.SUBJECT, c.BODY_PLAIN_TEXT FROM
-      DEALSYNC_STG_V1.EMAIL_METADATA m JOIN DEALSYNC_STG_V1.EMAIL_CONTENTS c ON
-      m.ID = c.EMAIL_METADATA_ID WHERE m.USER_ID = '{userId}' ORDER BY
-      m.CREATED_AT DESC LIMIT 200
+      SELECT m.*, c.* FROM DEALSYNC_STG_V1.EMAIL_METADATA m JOIN
+      DEALSYNC_STG_V1.EMAIL_CONTENTS c ON m.ID = c.EMAIL_METADATA_ID WHERE
+      m.USER_ID = '{userId}' ORDER BY m.CREATED_AT DESC LIMIT 200
   limit:
     description: Maximum number of rows to return (0 for no limit)
     required: false
