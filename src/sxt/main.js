@@ -1,6 +1,6 @@
 import * as core from '@actions/core'
 import { writeFileSync } from 'fs'
-import { join } from 'path'
+import { resolve } from 'path'
 
 const AUTH_BASE_URL = 'https://proxy.api.makeinfinite.dev'
 const SXT_API_URL = 'https://api.makeinfinite.dev'
@@ -132,10 +132,9 @@ export async function run() {
 
     const decodedRows = decodeBase64UrlFields(limitedRows)
 
-    // Write results to files to avoid GitHub Actions env var size limits
-    const workspace = process.env.GITHUB_WORKSPACE || '.'
-    const resultPath = join(workspace, 'sxt-result.json')
-    const decodedPath = join(workspace, 'sxt-decoded-result.json')
+    // Write results to files to avoid env var size limits
+    const resultPath = resolve('sxt-result.json')
+    const decodedPath = resolve('sxt-decoded-result.json')
 
     writeFileSync(resultPath, JSON.stringify(limitedRows))
     writeFileSync(decodedPath, JSON.stringify(decodedRows))
