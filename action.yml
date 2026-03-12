@@ -1,0 +1,21 @@
+name: Hello, World!
+description: Greet someone and record the time
+author: GitHub Actions
+
+# Define your inputs here.
+inputs:
+  sxt-auth-secret:
+    description: Shared secret for SXT auth API
+    required: true
+  sxt-endpoint-url:
+    description: SXT auth endpoint URL
+    required: true
+
+# Define your outputs here.
+outputs:
+  time:
+    description: The time we greeted you
+
+runs:
+  using: node24
+  main: dist/index.js
