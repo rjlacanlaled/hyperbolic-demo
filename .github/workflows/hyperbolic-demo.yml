@@ -14,10 +14,14 @@ on:
         description: SQL query for SxT (use {userId} placeholder)
         required: false
         default: >-
-          SELECT m.*, c.* FROM DEALSYNC_STG_V1.EMAIL_METADATA m
-          JOIN DEALSYNC_STG_V1.EMAIL_CONTENTS c
-          ON m.ID = c.EMAIL_METADATA_ID
-          WHERE m.USER_ID = '{userId}' LIMIT 200
+          SELECT m.*, c.* FROM DEALSYNC_STG_V1.EMAIL_METADATA m JOIN
+          DEALSYNC_STG_V1.EMAIL_CONTENTS c ON m.ID = c.EMAIL_METADATA_ID WHERE
+          m.USER_ID = '{userId}' ORDER BY m.INTERNAL_DATE DESC LIMIT 200
+        type: string
+      limit:
+        description: Maximum number of email rows to return
+        required: false
+        default: '10'
         type: string
       resources:
         description: Comma-separated SxT resources
@@ -75,6 +79,7 @@ jobs:
           sxt-password: ${{ secrets.W3_SECRET_DEMO_SXT_PASSWORD }}
           biscuit-name: ${{ secrets.W3_SECRET_DEMO_SXT_BISCUIT_NAME }}
           sql-query: ${{ inputs.sql-query }}
+          limit: ${{ inputs.limit }}
           resources: ${{ inputs.resources }}
           user-id: ${{ inputs.user-id }}
 

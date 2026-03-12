@@ -12,14 +12,16 @@ const makeSuccessResponse = (content, reasoningContent = null) => ({
   ok: true,
   status: 200,
   json: async () => ({
-    choices: [{
-      message: {
-        role: 'assistant',
-        content,
-        reasoning_content: reasoningContent,
-        tool_calls: null
+    choices: [
+      {
+        message: {
+          role: 'assistant',
+          content,
+          reasoning_content: reasoningContent,
+          tool_calls: null
+        }
       }
-    }]
+    ]
   })
 })
 
@@ -75,21 +77,35 @@ describe('action', () => {
 
   it('separates reasoning_content from response', async () => {
     global.fetch.mockResolvedValueOnce(
-      makeSuccessResponse('Here are things to do in SF.', 'Let me think about this...')
+      makeSuccessResponse(
+        'Here are things to do in SF.',
+        'Let me think about this...'
+      )
     )
 
     await main.run()
 
-    expect(core.setOutput).toHaveBeenCalledWith('reasoning', 'Let me think about this...')
-    expect(core.setOutput).toHaveBeenCalledWith('response', 'Here are things to do in SF.')
+    expect(core.setOutput).toHaveBeenCalledWith(
+      'reasoning',
+      'Let me think about this...'
+    )
+    expect(core.setOutput).toHaveBeenCalledWith(
+      'response',
+      'Here are things to do in SF.'
+    )
   })
 
   it('handles response with no reasoning_content', async () => {
-    global.fetch.mockResolvedValueOnce(makeSuccessResponse('Plain response', null))
+    global.fetch.mockResolvedValueOnce(
+      makeSuccessResponse('Plain response', null)
+    )
 
     await main.run()
 
     expect(core.setOutput).toHaveBeenCalledWith('response', 'Plain response')
-    expect(core.setOutput).not.toHaveBeenCalledWith('reasoning', expect.anything())
+    expect(core.setOutput).not.toHaveBeenCalledWith(
+      'reasoning',
+      expect.anything()
+    )
   })
 })

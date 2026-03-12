@@ -1,7 +1,14 @@
 /**
  * Unit tests for the SxT action, src/sxt/main.js
  */
-import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals'
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  jest
+} from '@jest/globals'
 const core = await import('../__fixtures__/core')
 
 jest.unstable_mockModule('@actions/core', () => core)
@@ -152,7 +159,8 @@ describe('executeQuery', () => {
 describe('decodeBase64UrlFields', () => {
   it('decodes BODY_PLAIN_TEXT and BODY_HTML_TEXT fields', () => {
     // "Hello World" in base64url
-    const base64url = Buffer.from('Hello World').toString('base64')
+    const base64url = Buffer.from('Hello World')
+      .toString('base64')
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
 
@@ -191,6 +199,7 @@ describe('run', () => {
         'sxt-password': 'test-pass',
         'biscuit-name': 'test-biscuit',
         'sql-query': "SELECT * FROM T WHERE USER_ID = '{userId}'",
+        limit: '10',
         resources: 'RES_A, RES_B',
         'user-id': 'uid-42'
       }
@@ -237,6 +246,39 @@ describe('run', () => {
     const body = JSON.parse(queryCall[1].body)
     expect(body.sqlText).toBe("SELECT * FROM T WHERE USER_ID = 'uid-42'")
     expect(body.resources).toEqual(['RES_A', 'RES_B'])
+  })
+
+  it('limits rows when limit is set', async () => {
+    core.getInput.mockImplementation((name) => {
+      const inputs = {
+        'sxt-user-id': 'test-user',
+        'sxt-password': 'test-pass',
+        'biscuit-name': 'test-biscuit',
+        'sql-query': "SELECT * FROM T WHERE USER_ID = '{userId}'",
+        limit: '2',
+        resources: 'RES_A',
+        'user-id': 'uid-42'
+      }
+      return inputs[name] || ''
+    })
+
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ sessionId: 'sid-1', accessToken: 'tok-1' })
+    })
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ biscuit: 'b-token' })
+    })
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [{ ID: '1' }, { ID: '2' }, { ID: '3' }, { ID: '4' }]
+    })
+
+    await run()
+
+    const resultCall = core.setOutput.mock.calls.find((c) => c[0] === 'result')
+    expect(JSON.parse(resultCall[1])).toHaveLength(2)
   })
 
   it('sets failure on login error', async () => {

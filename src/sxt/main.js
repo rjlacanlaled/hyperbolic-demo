@@ -99,6 +99,7 @@ export async function run() {
     const sqlQuery = core.getInput('sql-query', { required: true })
     const resources = core.getInput('resources', { required: true })
     const queryUserId = core.getInput('user-id', { required: true })
+    const limit = parseInt(core.getInput('limit') || '0', 10)
 
     // Substitute {userId} placeholder in the SQL query
     const resolvedQuery = sqlQuery.replace(/\{userId\}/g, queryUserId)
@@ -122,9 +123,14 @@ export async function run() {
 
     core.info(`Query returned ${rows.length} rows`)
 
-    const decodedRows = decodeBase64UrlFields(rows)
+    const limitedRows = limit > 0 ? rows.slice(0, limit) : rows
+    if (limit > 0 && rows.length > limit) {
+      core.info(`Limiting output to ${limit} rows`)
+    }
 
-    core.setOutput('result', JSON.stringify(rows))
+    const decodedRows = decodeBase64UrlFields(limitedRows)
+
+    core.setOutput('result', JSON.stringify(limitedRows))
     core.setOutput('decoded-result', JSON.stringify(decodedRows))
   } catch (error) {
     core.error(error.stack || error.toString())
