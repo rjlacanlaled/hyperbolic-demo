@@ -105,9 +105,15 @@ export async function run() {
       return result
     })
 
-    setEncryptedOutput('result', JSON.stringify(decoded))
+    const resultJson = JSON.stringify(decoded)
+    const inputBytes = Buffer.byteLength(rawData, 'utf-8')
+    const resultBytes = Buffer.byteLength(resultJson, 'utf-8')
+    core.info(
+      `Input: ${inputBytes} bytes (${(inputBytes / 1024).toFixed(1)} KB) | Result: ${resultBytes} bytes (${(resultBytes / 1024).toFixed(1)} KB) | Rows: ${decoded.length}`
+    )
+
+    setEncryptedOutput('result', resultJson)
     core.setOutput('encrypted', encryptionKey ? 'true' : 'false')
-    core.info(`Decoded ${decoded.length} rows`)
   } catch (error) {
     core.error(error.stack || error.toString())
     core.setFailed(error.message)

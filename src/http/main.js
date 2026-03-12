@@ -26,6 +26,11 @@ export async function run() {
     const response = await fetch(url, options)
     const responseBody = await response.text()
 
+    const responseBytes = Buffer.byteLength(responseBody, 'utf-8')
+    core.info(
+      `Response: ${response.status} | Size: ${responseBytes} bytes (${(responseBytes / 1024).toFixed(1)} KB)`
+    )
+
     core.setOutput('status', response.status.toString())
     setEncryptedOutput('response', responseBody)
     core.setOutput('encrypted', encryptionKey ? 'true' : 'false')
@@ -33,8 +38,6 @@ export async function run() {
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${responseBody}`)
     }
-
-    core.info(`Response: ${response.status}`)
   } catch (error) {
     core.error(error.stack || error.toString())
     core.setFailed(error.message)

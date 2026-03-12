@@ -27694,9 +27694,15 @@ async function run() {
       return result
     });
 
-    setEncryptedOutput('result', JSON.stringify(decoded));
+    const resultJson = JSON.stringify(decoded);
+    const inputBytes = Buffer.byteLength(rawData, 'utf-8');
+    const resultBytes = Buffer.byteLength(resultJson, 'utf-8');
+    coreExports.info(
+      `Input: ${inputBytes} bytes (${(inputBytes / 1024).toFixed(1)} KB) | Result: ${resultBytes} bytes (${(resultBytes / 1024).toFixed(1)} KB) | Rows: ${decoded.length}`
+    );
+
+    setEncryptedOutput('result', resultJson);
     coreExports.setOutput('encrypted', encryptionKey ? 'true' : 'false');
-    coreExports.info(`Decoded ${decoded.length} rows`);
   } catch (error) {
     coreExports.error(error.stack || error.toString());
     coreExports.setFailed(error.message);
