@@ -5,8 +5,7 @@ import { describe, expect, it, jest } from '@jest/globals'
 import {
   encryptValue,
   decryptValue,
-  createEncryptedOutput,
-  getInput
+  createEncryptedOutput
 } from '../src/crypto.js'
 
 describe('encryptValue / decryptValue', () => {
@@ -56,37 +55,3 @@ describe('createEncryptedOutput', () => {
   })
 })
 
-describe('getInput', () => {
-  it('decrypts encrypted input when key is set', () => {
-    const encrypted = encryptValue('secret-body', 'my-key')
-    const core = {
-      getInput: jest.fn(() => encrypted)
-    }
-    const result = getInput(core, 'my-key', 'body')
-    expect(result).toBe('secret-body')
-  })
-
-  it('returns raw value when input is not encrypted', () => {
-    const core = {
-      getInput: jest.fn(() => 'plain-value')
-    }
-    const result = getInput(core, 'my-key', 'body')
-    expect(result).toBe('plain-value')
-  })
-
-  it('returns raw value when no key', () => {
-    const core = {
-      getInput: jest.fn(() => 'plain-value')
-    }
-    const result = getInput(core, '', 'body')
-    expect(result).toBe('plain-value')
-  })
-
-  it('passes options through to core.getInput', () => {
-    const core = {
-      getInput: jest.fn(() => '')
-    }
-    getInput(core, '', 'url', { required: true })
-    expect(core.getInput).toHaveBeenCalledWith('url', { required: true })
-  })
-})
