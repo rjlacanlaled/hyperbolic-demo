@@ -33,20 +33,35 @@ inputs:
     description: Limit number of rows in JSON array response (0 for no limit)
     required: false
     default: '0'
-  response-fields:
-    description: Comma-separated JSON field names to extract as separate outputs (field-NAME)
+  extract-outputs:
+    description: >-
+      Comma-separated field names to extract from JSON response as separate
+      outputs. Supports dot notation (e.g., data.auth.sessionId). When set,
+      the full response output is not returned.
+    required: false
+  encrypt-outputs:
+    description: >-
+      Comma-separated output names to encrypt with AES-256-GCM.
+    required: false
+  decrypt-inputs:
+    description: >-
+      Comma-separated input.field dot-notation paths to decrypt in-place.
+      Example: headers.sid,headers.Authorization. Bearer token pattern
+      is auto-detected on Authorization headers.
     required: false
   encryption-key:
-    description: AES-256-GCM key - encrypts outputs and auto-decrypts inputs/header values
+    description: AES-256-GCM key for encrypt/decrypt operations
     required: false
 
 outputs:
-  response:
-    description: Response body as string (encrypted if encryption-key provided)
-  status:
+  success:
+    description: Whether the HTTP request succeeded (true/false)
+  status-code:
     description: HTTP status code
-  encrypted:
-    description: Whether response output is encrypted (true/false)
+  response:
+    description: >-
+      Response body (only when extract-outputs is not set).
+      Encrypted if listed in encrypt-outputs.
 
 runs:
   using: node24
