@@ -1,5 +1,5 @@
 import require$$0 from 'os';
-import require$$0$1, { randomBytes, createCipheriv, createHash, createDecipheriv } from 'crypto';
+import require$$0$1, { randomBytes, createCipheriv, createHash } from 'crypto';
 import require$$1, { readFileSync } from 'fs';
 import require$$1$5 from 'path';
 import require$$2 from 'http';
@@ -27543,26 +27543,6 @@ function encryptValue(plaintext, key) {
 }
 
 /**
- * Decrypt an AES-256-GCM ciphertext.
- * Expects base64(iv + authTag + ciphertext).
- */
-function decryptValue(ciphertext, key) {
-  const keyHash = deriveKey(key);
-  const buf = Buffer.from(ciphertext, 'base64');
-
-  const iv = buf.subarray(0, 12);
-  const tag = buf.subarray(12, 28);
-  const encrypted = buf.subarray(28);
-
-  const decipher = createDecipheriv('aes-256-gcm', keyHash, iv);
-  decipher.setAuthTag(tag);
-
-  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString(
-    'utf-8'
-  )
-}
-
-/**
  * Returns a function that wraps core.setOutput with encryption.
  * If encryptionKey is provided, values are encrypted automatically.
  */
@@ -27574,29 +27554,6 @@ function createEncryptedOutput(core, encryptionKey) {
       core.setOutput(name, value);
     }
   }
-}
-
-/**
- * Try to decrypt a value. Returns decrypted string on success, null on failure.
- */
-function tryDecrypt(value, key) {
-  try {
-    return decryptValue(value, key)
-  } catch {
-    return null
-  }
-}
-
-/**
- * Get an input value, automatically decrypting if encryption key is set.
- * If decryption fails (input wasn't encrypted), returns the raw value.
- */
-function getInput(core, encryptionKey, name, options) {
-  const value = core.getInput(name, options);
-  if (encryptionKey && value) {
-    return tryDecrypt(value, encryptionKey) ?? value
-  }
-  return value
 }
 
 /**
@@ -27644,7 +27601,7 @@ async function run() {
     const setEncryptedOutput = createEncryptedOutput(core$1, encryptionKey);
 
     const inputFile = coreExports.getInput('input-file');
-    const input = getInput(core$1, encryptionKey, 'input');
+    const input = coreExports.getInput('input');
     const fields = coreExports.getInput('fields', { required: true })
       .split(',')
       .map((f) => f.trim());

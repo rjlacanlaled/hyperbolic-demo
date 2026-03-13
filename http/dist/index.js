@@ -28,28 +28,9 @@ import require$$0$9 from 'diagnostics_channel';
 import require$$2$2 from 'child_process';
 import require$$6$1 from 'timers';
 
-function _mergeNamespaces(n, m) {
-	m.forEach(function (e) {
-		e && typeof e !== 'string' && !Array.isArray(e) && Object.keys(e).forEach(function (k) {
-			if (k !== 'default' && !(k in n)) {
-				var d = Object.getOwnPropertyDescriptor(e, k);
-				Object.defineProperty(n, k, d.get ? d : {
-					enumerable: true,
-					get: function () { return e[k]; }
-				});
-			}
-		});
-	});
-	return Object.freeze(n);
-}
-
 var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
 
-function getDefaultExportFromCjs (x) {
-	return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, 'default') ? x['default'] : x;
-}
-
-var core$2 = {};
+var core = {};
 
 var command = {};
 
@@ -27124,10 +27105,10 @@ function requirePlatform () {
 var hasRequiredCore;
 
 function requireCore () {
-	if (hasRequiredCore) return core$2;
+	if (hasRequiredCore) return core;
 	hasRequiredCore = 1;
 	(function (exports$1) {
-		var __createBinding = (core$2 && core$2.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+		var __createBinding = (core && core.__createBinding) || (Object.create ? (function(o, m, k, k2) {
 		    if (k2 === undefined) k2 = k;
 		    var desc = Object.getOwnPropertyDescriptor(m, k);
 		    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
@@ -27138,12 +27119,12 @@ function requireCore () {
 		    if (k2 === undefined) k2 = k;
 		    o[k2] = m[k];
 		}));
-		var __setModuleDefault = (core$2 && core$2.__setModuleDefault) || (Object.create ? (function(o, v) {
+		var __setModuleDefault = (core && core.__setModuleDefault) || (Object.create ? (function(o, v) {
 		    Object.defineProperty(o, "default", { enumerable: true, value: v });
 		}) : function(o, v) {
 		    o["default"] = v;
 		});
-		var __importStar = (core$2 && core$2.__importStar) || (function () {
+		var __importStar = (core && core.__importStar) || (function () {
 		    var ownKeys = function(o) {
 		        ownKeys = Object.getOwnPropertyNames || function (o) {
 		            var ar = [];
@@ -27160,7 +27141,7 @@ function requireCore () {
 		        return result;
 		    };
 		})();
-		var __awaiter = (core$2 && core$2.__awaiter) || function (thisArg, _arguments, P, generator) {
+		var __awaiter = (core && core.__awaiter) || function (thisArg, _arguments, P, generator) {
 		    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
 		    return new (P || (P = Promise))(function (resolve, reject) {
 		        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -27505,17 +27486,11 @@ function requireCore () {
 		 */
 		exports$1.platform = __importStar(requirePlatform());
 		
-	} (core$2));
-	return core$2;
+	} (core));
+	return core;
 }
 
 var coreExports = requireCore();
-var core = /*@__PURE__*/getDefaultExportFromCjs(coreExports);
-
-var core$1 = /*#__PURE__*/_mergeNamespaces({
-	__proto__: null,
-	default: core
-}, [coreExports]);
 
 /**
  * Derive a 32-byte key from a passphrase using SHA-256.
@@ -27563,20 +27538,6 @@ function decryptValue(ciphertext, key) {
 }
 
 /**
- * Returns a function that wraps core.setOutput with encryption.
- * If encryptionKey is provided, values are encrypted automatically.
- */
-function createEncryptedOutput(core, encryptionKey) {
-  return (name, value) => {
-    if (encryptionKey) {
-      core.setOutput(name, encryptValue(value, encryptionKey));
-    } else {
-      core.setOutput(name, value);
-    }
-  }
-}
-
-/**
  * Try to decrypt a value. Returns decrypted string on success, null on failure.
  */
 function tryDecrypt(value, key) {
@@ -27585,49 +27546,6 @@ function tryDecrypt(value, key) {
   } catch {
     return null
   }
-}
-
-/**
- * Get an input value, automatically decrypting if encryption key is set.
- * If decryption fails (input wasn't encrypted), returns the raw value.
- */
-function getInput(core, encryptionKey, name, options) {
-  const value = core.getInput(name, options);
-  if (encryptionKey && value) {
-    return tryDecrypt(value, encryptionKey) ?? value
-  }
-  return value
-}
-
-/**
- * Parse a headers JSON string, auto-decrypting individual header values.
- * Handles "Bearer ENCRYPTED" pattern for Authorization headers.
- */
-function decryptHeaders(headersJson, encryptionKey) {
-  const headers = JSON.parse(headersJson);
-  if (!encryptionKey) return headers
-
-  for (const [key, value] of Object.entries(headers)) {
-    if (typeof value !== 'string') continue
-
-    // Try decrypting the whole value
-    const decrypted = tryDecrypt(value, encryptionKey);
-    if (decrypted !== null) {
-      headers[key] = decrypted;
-      continue
-    }
-
-    // Handle "Bearer ENCRYPTED_BLOB" pattern
-    if (value.startsWith('Bearer ')) {
-      const token = value.slice(7);
-      const decryptedToken = tryDecrypt(token, encryptionKey);
-      if (decryptedToken !== null) {
-        headers[key] = `Bearer ${decryptedToken}`;
-      }
-    }
-  }
-
-  return headers
 }
 
 /**
@@ -27668,18 +27586,83 @@ function extractKeys(jsonString, keys) {
   return Object.fromEntries(selected.map((item) => [item.name, item.value]))
 }
 
+function getNestedValue(obj, path) {
+  const parts = path.split('.');
+  let current = obj;
+  for (const part of parts) {
+    if (current === undefined || current === null) return undefined
+    current = current[part];
+  }
+  return current
+}
+
+function decryptAtPath(obj, pathParts, encryptionKey) {
+  let current = obj;
+  for (let i = 0; i < pathParts.length - 1; i++) {
+    if (current[pathParts[i]] === undefined) return obj
+    current = current[pathParts[i]];
+  }
+  const lastKey = pathParts[pathParts.length - 1];
+  const value = current[lastKey];
+  if (typeof value !== 'string') return obj
+
+  // Handle Bearer prefix
+  if (value.startsWith('Bearer ')) {
+    const token = value.slice(7);
+    const decrypted = tryDecrypt(token, encryptionKey);
+    if (decrypted !== null) {
+      current[lastKey] = `Bearer ${decrypted}`;
+    }
+    return obj
+  }
+
+  const decrypted = tryDecrypt(value, encryptionKey);
+  if (decrypted !== null) {
+    current[lastKey] = decrypted;
+  }
+  return obj
+}
+
 async function run() {
   try {
     const encryptionKey = coreExports.getInput('encryption-key');
 
-    const setEncryptedOutput = createEncryptedOutput(core$1, encryptionKey);
-
     const url = coreExports.getInput('url', { required: true });
     const method = coreExports.getInput('method') || 'POST';
-    const headersInput = getInput(core$1, encryptionKey, 'headers') || '{}';
-    const body = getInput(core$1, encryptionKey, 'body');
+    const headersRaw = coreExports.getInput('headers') || '{}';
+    const bodyRaw = coreExports.getInput('body');
 
-    const headers = decryptHeaders(headersInput, encryptionKey);
+    // Parse mutable copies
+    const inputStore = {
+      headers: JSON.parse(headersRaw)
+    };
+
+    // Try parsing body as JSON for path-based decryption
+    let bodyIsJson = false;
+    if (bodyRaw) {
+      try {
+        inputStore.body = JSON.parse(bodyRaw);
+        bodyIsJson = true;
+      } catch {
+        inputStore.body = bodyRaw;
+      }
+    }
+
+    // decrypt-inputs: path-based decryption
+    const decryptInputs = coreExports.getInput('decrypt-inputs');
+    if (decryptInputs && encryptionKey) {
+      for (const path of decryptInputs.split(',').map((p) => p.trim())) {
+        const parts = path.split('.');
+        const inputName = parts[0];
+        const fieldParts = parts.slice(1);
+        if (inputStore[inputName] !== undefined && fieldParts.length > 0) {
+          decryptAtPath(inputStore[inputName], fieldParts, encryptionKey);
+        }
+      }
+    }
+
+    const headers = inputStore.headers;
+    const body = bodyIsJson ? JSON.stringify(inputStore.body) : inputStore.body;
 
     coreExports.info(`${method} ${url}`);
 
@@ -27696,23 +27679,35 @@ async function run() {
       `Response: ${response.status} | Size: ${responseBytes} bytes (${(responseBytes / 1024).toFixed(1)} KB)`
     );
 
-    coreExports.setOutput('status', response.status.toString());
+    coreExports.setOutput('success', response.ok ? 'true' : 'false');
+    coreExports.setOutput('status-code', response.status.toString());
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${responseBody}`)
     }
 
-    // Extract individual JSON fields as separate outputs
-    const responseFields = coreExports.getInput('response-fields');
-    if (responseFields) {
+    const extractOutputs = coreExports.getInput('extract-outputs');
+    const encryptOutputsList = coreExports.getInput('encrypt-outputs');
+    const fieldsToEncrypt = encryptOutputsList
+      ? encryptOutputsList.split(',').map((f) => f.trim())
+      : [];
+
+    function setOutput(name, value) {
+      if (fieldsToEncrypt.includes(name) && encryptionKey) {
+        coreExports.setOutput(name, encryptValue(value, encryptionKey));
+      } else {
+        coreExports.setOutput(name, value);
+      }
+    }
+
+    if (extractOutputs) {
       const parsed = JSON.parse(responseBody);
-      for (const field of responseFields.split(',').map((f) => f.trim())) {
-        if (parsed[field] !== undefined) {
-          const value =
-            typeof parsed[field] === 'string'
-              ? parsed[field]
-              : JSON.stringify(parsed[field]);
-          setEncryptedOutput(field, value);
+      for (const fieldPath of extractOutputs.split(',').map((f) => f.trim())) {
+        const value = getNestedValue(parsed, fieldPath);
+        if (value !== undefined) {
+          const leafName = fieldPath.split('.').pop();
+          const strValue = typeof value === 'string' ? value : JSON.stringify(value);
+          setOutput(leafName, strValue);
         }
       }
     }
@@ -27774,8 +27769,9 @@ async function run() {
       );
     }
 
-    setEncryptedOutput('response', processedOutput);
-    coreExports.setOutput('encrypted', encryptionKey ? 'true' : 'false');
+    if (!extractOutputs) {
+      setOutput('response', processedOutput);
+    }
   } catch (error) {
     coreExports.error(error.stack || error.toString());
     coreExports.setFailed(error.message);
