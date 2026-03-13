@@ -12,8 +12,15 @@ committing to ensure nothing sensitive is leaked.
 
 ## What This Is
 
-A GitHub Action (JavaScript) that fetches SXT auth via a shared secret. Based on
-the hyperbolic-demo template.
+A collection of GitHub Actions (JavaScript) for a demo workflow that fetches
+emails from SxT (Space and Time), decodes them, and summarizes them with an AI
+model via Hyperbolic.
+
+Two actions:
+
+- **`http`** — Generic HTTP request action with explicit encryption controls
+  (`decrypt-inputs`, `extract-outputs`, `encrypt-outputs`).
+- **`base64-decode`** — Decodes base64url-encoded fields in JSON array data.
 
 ## Commands
 
@@ -23,7 +30,7 @@ npm test                # Run tests (Jest with ESM via --experimental-vm-modules
 npm run lint            # ESLint
 npm run format:check    # Prettier check
 npm run format:write    # Prettier fix
-npm run package         # Bundle src/ into dist/index.js via Rollup
+npm run package         # Bundle src/ into http/dist/ and base64-decode/dist/ via Rollup
 npm run bundle          # Format + package
 npm run all             # Format + lint + test + coverage badge + package
 ```
@@ -32,21 +39,31 @@ npm run all             # Format + lint + test + coverage badge + package
 
 - **ES Modules** throughout (`"type": "module"` in package.json). Node >= 20
   required (.node-version: 24.4.0).
-- **`src/main.js`** — Core logic exported as `run()`. Uses `@actions/core` for
-  inputs/outputs and `@actions/github` for context.
-- **`src/index.js`** — Entrypoint that calls `run()`.
-- **`dist/index.js`** — Rollup-bundled output (committed to repo). The action
-  runs this file (`action.yml` → `runs.main: dist/index.js`). **Must be rebuilt
-  (`npm run package`) after any source change.**
-- **`action.yml`** — Action metadata. Inputs: `sxt_auth_secret`,
-  `sxt_endpoint_url`. Output: `sxt-auth`. Runtime: `node24`.
+- **`src/http/main.js`** — HTTP action core logic exported as `run()`. Uses
+  `@actions/core` for inputs/outputs. Supports `decrypt-inputs` (path-based
+  decryption), `extract-outputs` (dot-notation field extraction),
+  `encrypt-outputs` (selective encryption).
+- **`src/http/index.js`** — Entrypoint that calls `run()`.
+- **`src/base64-decode/main.js`** — Base64 decode action logic. Decodes
+  base64url fields, supports select-keys extraction and output filtering.
+- **`src/base64-decode/index.js`** — Entrypoint that calls `run()`.
+- **`src/crypto.js`** — Shared AES-256-GCM encryption module. Exports
+  `encryptValue`, `decryptValue`, `tryDecrypt`, `createEncryptedOutput`.
+- **`scripts/decrypt.js`** — Standalone CLI helper for shell steps to decrypt
+  encrypted values. Inlines crypto logic (does not import from src/crypto.js).
+- **`http/dist/index.js`** and **`base64-decode/dist/index.js`** — Rollup-bundled
+  outputs (committed to repo). Each action runs its own dist file. **Must be
+  rebuilt (`npm run package`) after any source change.**
+- **`http/action.yml`** — HTTP action metadata. Key inputs: `url`, `method`,
+  `headers`, `body`, `decrypt-inputs`, `extract-outputs`, `encrypt-outputs`,
+  `encryption-key`. Outputs: `success`, `status-code`, `response`.
+- **`base64-decode/action.yml`** — Base64 decode action metadata.
 
 ## Testing
 
 Tests use Jest 30 with ESM support. Mocking pattern:
 
-- **`__fixtures__/core.js`** and **`__fixtures__/github.js`** — Manual mock
-  modules for `@actions/core` and `@actions/github`.
+- **`__fixtures__/core.js`** — Manual mock module for `@actions/core`.
 - Tests use `jest.unstable_mockModule()` with top-level `await import()` to mock
   ESM dependencies (not `jest.mock()`).
 
@@ -57,6 +74,6 @@ tests the action itself by running it with `uses: ./`.
 
 ## Important Workflow
 
-After changing source code: run `npm run package` to rebuild `dist/index.js`,
-then commit the updated dist. CI has a `check-dist` workflow that verifies dist
-is up to date.
+After changing source code: run `npm run package` to rebuild dist bundles,
+then commit the updated dist files. CI has a `check-dist` workflow that verifies
+dist is up to date.
