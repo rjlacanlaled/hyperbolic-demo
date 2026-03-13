@@ -11,6 +11,8 @@ on:
     types: [opened, synchronize]
   pull_request_review:
     types: [submitted]
+  check_suite:
+    types: [completed]
 
 jobs:
   # Claude responds to @claude mentions and implements labeled issues
@@ -102,6 +104,40 @@ jobs:
         run: |
           gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers \
             --method POST -f "reviewers[]=copilot"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  # Notify Claude when CI fails on its branches
+  notify-ci-failure:
+    if: |
+      github.event_name == 'check_suite' &&
+      github.event.check_suite.conclusion == 'failure' &&
+      startsWith(github.event.check_suite.head_branch, 'claude/')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Find PR and notify Claude
+        run: |
+          PR=$(gh pr list --repo ${{ github.repository }} \
+            --head "${{ github.event.check_suite.head_branch }}" \
+            --json number --jq '.[0].number')
+          if [ -z "$PR" ]; then
+            echo "No PR found for branch ${{ github.event.check_suite.head_branch }}"
+            exit 0
+          fi
+
+          # Avoid infinite loops: check if last comment is already a CI fix request
+          LAST_COMMENT=$(gh api repos/${{ github.repository }}/issues/${PR}/comments \
+            --jq '.[-1].body // ""')
+          if echo "$LAST_COMMENT" | grep -q "CI checks have failed"; then
+            echo "Already notified Claude about CI failure, skipping"
+            exit 0
+          fi
+
+          gh pr comment "$PR" --repo ${{ github.repository }} \
+            --body "@claude CI checks have failed on this PR. Please read the CI logs, identify the failures you can fix (lint, test, build errors), fix them, and push the changes."
         env:
           GH_TOKEN: ${{ github.token }}
 
