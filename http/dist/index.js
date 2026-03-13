@@ -27712,7 +27712,7 @@ async function run() {
             typeof parsed[field] === 'string'
               ? parsed[field]
               : JSON.stringify(parsed[field]);
-          setEncryptedOutput(`field-${field}`, value);
+          setEncryptedOutput(field, value);
         }
       }
     }

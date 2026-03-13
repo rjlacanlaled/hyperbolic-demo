@@ -43,8 +43,6 @@ inputs:
 outputs:
   response:
     description: Response body as string (encrypted if encryption-key provided)
-  field-*:
-    description: Individual response fields extracted via response-fields (encrypted if encryption-key provided)
   status:
     description: HTTP status code
   encrypted:
