@@ -8,7 +8,10 @@ on:
         required: false
         default: >-
           Summarize the following emails. For each email, list the sender,
-          subject, and a brief summary of the body.
+          subject, and a brief summary of the body. IMPORTANT: Do not include
+          any sensitive information in the summary such as verification codes,
+          passwords, tokens, personal addresses, phone numbers, or any other
+          private data. Redact or omit such details entirely.
         type: string
       sql-query:
         description: SQL query for SxT (use {userId} placeholder)
