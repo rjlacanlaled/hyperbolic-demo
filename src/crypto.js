@@ -11,7 +11,7 @@ function deriveKey(passphrase) {
  * Encrypt a string using AES-256-GCM.
  * Returns base64(iv + authTag + ciphertext).
  *
- * @param {string} value - The plaintext string to encrypt.
+ * @param {string} plaintext - The plaintext string to encrypt.
  * @param {string} key - The passphrase used to derive the encryption key.
  * @returns {string} Base64-encoded string containing the IV, auth tag, and ciphertext.
  */
@@ -33,7 +33,7 @@ export function encryptValue(plaintext, key) {
  * Decrypt an AES-256-GCM ciphertext.
  * Expects base64(iv + authTag + ciphertext).
  *
- * @param {string} encrypted - Base64-encoded string containing the IV, auth tag, and ciphertext.
+ * @param {string} ciphertext - Base64-encoded string containing the IV, auth tag, and ciphertext.
  * @param {string} key - The passphrase used to derive the decryption key.
  * @returns {string} The decrypted plaintext string.
  * @throws {Error} Throws if decryption fails (e.g. wrong key or corrupted data).
