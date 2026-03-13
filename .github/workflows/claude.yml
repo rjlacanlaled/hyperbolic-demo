@@ -1,0 +1,70 @@
+name: Claude Code
+
+on:
+  # Interactive: Claude responds to @claude mentions
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+  # Automation: Claude implements issues labeled 'claude'
+  issues:
+    types: [opened, labeled]
+
+  # Automation: Auto-request Copilot review on PRs
+  pull_request:
+    types: [opened, synchronize]
+
+  # Automation: Claude addresses Copilot review feedback
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  # Claude implements issues and responds to @claude mentions
+  claude:
+    if: |
+      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'claude')) ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+  # Claude addresses Copilot's review feedback automatically
+  address-copilot-review:
+    if: |
+      github.event_name == 'pull_request_review' &&
+      contains(github.event.review.user.login, 'copilot')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            GitHub Copilot has reviewed this PR and left feedback. Please:
+            1. Read all of Copilot's review comments on this PR
+            2. Address each actionable suggestion by making code changes
+            3. Reply to each comment explaining what you changed
+            4. If no actionable feedback remains, comment that the PR is ready for human review
+
+  # Auto-request Copilot review on non-draft PRs
+  request-copilot-review:
+    if: |
+      github.event_name == 'pull_request' &&
+      !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Request Copilot review
+        continue-on-error: true
+        run: gh pr edit ${{ github.event.pull_request.number }} --add-reviewer @copilot
+        env:
+          GH_TOKEN: ${{ github.token }}
