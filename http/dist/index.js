@@ -27712,64 +27712,64 @@ async function run() {
       }
     }
 
-    // Optional post-processing for JSON array responses
-    const decodeFields = coreExports.getInput('decode-fields');
-    const outputFields = coreExports.getInput('output-fields');
-    const selectKeys = coreExports.getInput('select-keys');
-    const limit = parseInt(coreExports.getInput('limit') || '0', 10);
+    if (!extractOutputs) {
+      // Optional post-processing for JSON array responses
+      const decodeFields = coreExports.getInput('decode-fields');
+      const outputFields = coreExports.getInput('output-fields');
+      const selectKeys = coreExports.getInput('select-keys');
+      const limit = parseInt(coreExports.getInput('limit') || '0', 10);
 
-    let processedOutput = responseBody;
+      let processedOutput = responseBody;
 
-    if (decodeFields || outputFields || selectKeys || limit > 0) {
-      let rows = JSON.parse(responseBody);
+      if (decodeFields || outputFields || selectKeys || limit > 0) {
+        let rows = JSON.parse(responseBody);
 
-      if (limit > 0 && rows.length > limit) {
-        coreExports.info(`Limiting from ${rows.length} to ${limit} rows`);
-        rows = rows.slice(0, limit);
+        if (limit > 0 && rows.length > limit) {
+          coreExports.info(`Limiting from ${rows.length} to ${limit} rows`);
+          rows = rows.slice(0, limit);
+        }
+
+        const fieldsToDecode = decodeFields
+          ? decodeFields.split(',').map((f) => f.trim())
+          : [];
+        const keySelections = parseSelectKeys(selectKeys);
+        const fieldsToOutput = outputFields
+          ? outputFields.split(',').map((f) => f.trim())
+          : null;
+
+        rows = rows.map((row) => {
+          let result = { ...row };
+
+          for (const field of fieldsToDecode) {
+            if (result[field]) {
+              result[field] = decodeBase64Url(result[field]);
+            }
+          }
+
+          for (const [field, keys] of Object.entries(keySelections)) {
+            if (result[field]) {
+              result[field] = extractKeys(result[field], keys);
+            }
+          }
+
+          if (fieldsToOutput) {
+            const filtered = {};
+            for (const f of fieldsToOutput) {
+              if (f in result) filtered[f] = result[f];
+            }
+            result = filtered;
+          }
+
+          return result
+        });
+
+        processedOutput = JSON.stringify(rows);
+        const outputBytes = Buffer.byteLength(processedOutput, 'utf-8');
+        coreExports.info(
+          `Processed: ${outputBytes} bytes (${(outputBytes / 1024).toFixed(1)} KB) | Rows: ${rows.length}`
+        );
       }
 
-      const fieldsToDecode = decodeFields
-        ? decodeFields.split(',').map((f) => f.trim())
-        : [];
-      const keySelections = parseSelectKeys(selectKeys);
-      const fieldsToOutput = outputFields
-        ? outputFields.split(',').map((f) => f.trim())
-        : null;
-
-      rows = rows.map((row) => {
-        let result = { ...row };
-
-        for (const field of fieldsToDecode) {
-          if (result[field]) {
-            result[field] = decodeBase64Url(result[field]);
-          }
-        }
-
-        for (const [field, keys] of Object.entries(keySelections)) {
-          if (result[field]) {
-            result[field] = extractKeys(result[field], keys);
-          }
-        }
-
-        if (fieldsToOutput) {
-          const filtered = {};
-          for (const f of fieldsToOutput) {
-            if (f in result) filtered[f] = result[f];
-          }
-          result = filtered;
-        }
-
-        return result
-      });
-
-      processedOutput = JSON.stringify(rows);
-      const outputBytes = Buffer.byteLength(processedOutput, 'utf-8');
-      coreExports.info(
-        `Processed: ${outputBytes} bytes (${(outputBytes / 1024).toFixed(1)} KB) | Rows: ${rows.length}`
-      );
-    }
-
-    if (!extractOutputs) {
       setOutput('response', processedOutput);
     }
   } catch (error) {

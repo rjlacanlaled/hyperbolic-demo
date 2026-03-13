@@ -25,7 +25,7 @@ inputs:
       Format: FIELD:key1,key2;FIELD2:key3
     required: false
   encryption-key:
-    description: AES-256-GCM key - encrypts outputs and auto-decrypts inputs
+    description: AES-256-GCM key - encrypts output when provided
     required: false
 
 outputs:
