@@ -6,7 +6,7 @@ import {
   encryptValue,
   decryptValue,
   createEncryptedOutput,
-  decryptInput
+  getInput
 } from '../src/crypto.js'
 
 describe('encryptValue / decryptValue', () => {
@@ -56,21 +56,21 @@ describe('createEncryptedOutput', () => {
   })
 })
 
-describe('decryptInput', () => {
-  it('decrypts listed input', () => {
+describe('getInput', () => {
+  it('decrypts encrypted input when key is set', () => {
     const encrypted = encryptValue('secret-body', 'my-key')
     const core = {
       getInput: jest.fn(() => encrypted)
     }
-    const result = decryptInput(core, 'my-key', 'body', 'body')
+    const result = getInput(core, 'my-key', 'body')
     expect(result).toBe('secret-body')
   })
 
-  it('returns raw value when input not in encrypted list', () => {
+  it('returns raw value when input is not encrypted', () => {
     const core = {
       getInput: jest.fn(() => 'plain-value')
     }
-    const result = decryptInput(core, 'my-key', 'other', 'body')
+    const result = getInput(core, 'my-key', 'body')
     expect(result).toBe('plain-value')
   })
 
@@ -78,7 +78,15 @@ describe('decryptInput', () => {
     const core = {
       getInput: jest.fn(() => 'plain-value')
     }
-    const result = decryptInput(core, '', '', 'body')
+    const result = getInput(core, '', 'body')
     expect(result).toBe('plain-value')
+  })
+
+  it('passes options through to core.getInput', () => {
+    const core = {
+      getInput: jest.fn(() => '')
+    }
+    getInput(core, '', 'url', { required: true })
+    expect(core.getInput).toHaveBeenCalledWith('url', { required: true })
   })
 })

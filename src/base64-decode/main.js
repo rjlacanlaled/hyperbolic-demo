@@ -1,6 +1,6 @@
 import * as core from '@actions/core'
 import { readFileSync } from 'fs'
-import { createEncryptedOutput, decryptInput } from '../crypto.js'
+import { createEncryptedOutput, getInput } from '../crypto.js'
 
 /**
  * Decode a base64url-encoded string to UTF-8.
@@ -43,12 +43,11 @@ export function extractKeys(jsonString, keys) {
 export async function run() {
   try {
     const encryptionKey = core.getInput('encryption-key')
-    const encryptedInputs = core.getInput('encrypted-inputs')
 
     const setEncryptedOutput = createEncryptedOutput(core, encryptionKey)
 
     const inputFile = core.getInput('input-file')
-    const input = decryptInput(core, encryptionKey, encryptedInputs, 'input')
+    const input = getInput(core, encryptionKey, 'input')
     const fields = core
       .getInput('fields', { required: true })
       .split(',')

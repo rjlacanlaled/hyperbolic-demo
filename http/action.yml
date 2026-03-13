@@ -34,10 +34,7 @@ inputs:
     required: false
     default: '0'
   encryption-key:
-    description: AES-256-GCM key for encrypting outputs and decrypting inputs
-    required: false
-  encrypted-inputs:
-    description: Comma-separated input names to decrypt before use
+    description: AES-256-GCM key - encrypts outputs and auto-decrypts inputs
     required: false
 
 outputs:

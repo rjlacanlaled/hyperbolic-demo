@@ -27577,17 +27577,17 @@ function createEncryptedOutput(core, encryptionKey) {
 }
 
 /**
- * Decrypt specified inputs in place.
- * Returns the decrypted value for a given input name.
+ * Get an input value, automatically decrypting if encryption key is set.
+ * If decryption fails (input wasn't encrypted), returns the raw value.
  */
-function decryptInput(core, encryptionKey, encryptedInputs, name) {
-  const fieldsToDecrypt = encryptedInputs
-    ? encryptedInputs.split(',').map((f) => f.trim())
-    : [];
-
-  const value = core.getInput(name);
-  if (encryptionKey && fieldsToDecrypt.includes(name) && value) {
-    return decryptValue(value, encryptionKey)
+function getInput(core, encryptionKey, name, options) {
+  const value = core.getInput(name, options);
+  if (encryptionKey && value) {
+    try {
+      return decryptValue(value, encryptionKey)
+    } catch {
+      return value
+    }
   }
   return value
 }
@@ -27633,12 +27633,11 @@ function extractKeys(jsonString, keys) {
 async function run() {
   try {
     const encryptionKey = coreExports.getInput('encryption-key');
-    const encryptedInputs = coreExports.getInput('encrypted-inputs');
 
     const setEncryptedOutput = createEncryptedOutput(core$1, encryptionKey);
 
     const inputFile = coreExports.getInput('input-file');
-    const input = decryptInput(core$1, encryptionKey, encryptedInputs, 'input');
+    const input = getInput(core$1, encryptionKey, 'input');
     const fields = coreExports.getInput('fields', { required: true })
       .split(',')
       .map((f) => f.trim());

@@ -60,17 +60,17 @@ export function createEncryptedOutput(core, encryptionKey) {
 }
 
 /**
- * Decrypt specified inputs in place.
- * Returns the decrypted value for a given input name.
+ * Get an input value, automatically decrypting if encryption key is set.
+ * If decryption fails (input wasn't encrypted), returns the raw value.
  */
-export function decryptInput(core, encryptionKey, encryptedInputs, name) {
-  const fieldsToDecrypt = encryptedInputs
-    ? encryptedInputs.split(',').map((f) => f.trim())
-    : []
-
-  const value = core.getInput(name)
-  if (encryptionKey && fieldsToDecrypt.includes(name) && value) {
-    return decryptValue(value, encryptionKey)
+export function getInput(core, encryptionKey, name, options) {
+  const value = core.getInput(name, options)
+  if (encryptionKey && value) {
+    try {
+      return decryptValue(value, encryptionKey)
+    } catch {
+      return value
+    }
   }
   return value
 }

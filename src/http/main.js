@@ -1,5 +1,5 @@
 import * as core from '@actions/core'
-import { createEncryptedOutput, decryptInput } from '../crypto.js'
+import { createEncryptedOutput, getInput } from '../crypto.js'
 import {
   decodeBase64Url,
   parseSelectKeys,
@@ -9,15 +9,14 @@ import {
 export async function run() {
   try {
     const encryptionKey = core.getInput('encryption-key')
-    const encryptedInputs = core.getInput('encrypted-inputs')
 
     const setEncryptedOutput = createEncryptedOutput(core, encryptionKey)
 
     const url = core.getInput('url', { required: true })
     const method = core.getInput('method') || 'POST'
     const headersInput =
-      decryptInput(core, encryptionKey, encryptedInputs, 'headers') || '{}'
-    const body = decryptInput(core, encryptionKey, encryptedInputs, 'body')
+      getInput(core, encryptionKey, 'headers') || '{}'
+    const body = getInput(core, encryptionKey, 'body')
 
     const headers = JSON.parse(headersInput)
 
