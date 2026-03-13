@@ -63,10 +63,15 @@ jobs:
   fetch-emails:
     name: Fetch Emails from SxT
     runs-on: ubuntu-latest
+    env:
+      ENCRYPTION_KEY: ${{ secrets.W3_SECRET_DEMO_ENCRYPTION_KEY }}
     outputs:
       email-summary: ${{ steps.format.outputs.email-summary }}
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Login to SxT
         id: login
         uses: w3-io/demo-gha-containerization-1/http@main
@@ -77,8 +82,9 @@ jobs:
           body: >-
             {"userId": "${{ secrets.W3_SECRET_DEMO_SXT_USER_ID }}",
              "password": "${{ secrets.W3_SECRET_DEMO_SXT_PASSWORD }}"}
-          response-fields: sessionId,accessToken
-          encryption-key: ${{ secrets.W3_SECRET_DEMO_ENCRYPTION_KEY }}
+          extract-outputs: 'sessionId,accessToken'
+          encrypt-outputs: 'sessionId,accessToken'
+          encryption-key: ${{ env.ENCRYPTION_KEY }}
 
       - name: Fetch Biscuit
         id: biscuit
@@ -89,17 +95,20 @@ jobs:
           method: GET
           headers: >-
             {"sid": "${{ steps.login.outputs.sessionId }}"}
-          response-fields: biscuit
-          encryption-key: ${{ secrets.W3_SECRET_DEMO_ENCRYPTION_KEY }}
+          decrypt-inputs: 'headers.sid'
+          extract-outputs: 'biscuit'
+          encrypt-outputs: 'biscuit'
+          encryption-key: ${{ env.ENCRYPTION_KEY }}
 
       - name: Build query body
         id: build-query
         env:
+          ENCRYPTED_BISCUIT: ${{ steps.biscuit.outputs.biscuit }}
           SQL_QUERY: ${{ inputs.sql-query }}
           USER_ID: ${{ inputs.user-id }}
-          BISCUIT: ${{ steps.biscuit.outputs.biscuit }}
           RESOURCES: ${{ inputs.resources }}
         run: |
+          BISCUIT=$(node scripts/decrypt.js "$ENCRYPTION_KEY" "$ENCRYPTED_BISCUIT")
           RESOLVED_SQL=$(echo "$SQL_QUERY" | sed "s/{userId}/$USER_ID/g")
           RESOURCES_JSON=$(echo "$RESOURCES" | jq -R 'split(",") | map(ltrimstr(" ") | rtrimstr(" "))')
           BODY=$(jq -cn \
@@ -109,7 +118,7 @@ jobs:
             '{sqlText: $sql, biscuits: [$biscuit], resources: $resources}')
           echo "body=$BODY" >> "$GITHUB_OUTPUT"
 
-      - name: Execute Query and Decode
+      - name: Execute Query
         id: query
         uses: w3-io/demo-gha-containerization-1/http@main
         with:
@@ -119,17 +128,20 @@ jobs:
             {"Content-Type": "application/json",
              "Authorization": "Bearer ${{ steps.login.outputs.accessToken }}"}
           body: ${{ steps.build-query.outputs.body }}
+          decrypt-inputs: 'headers.Authorization'
           decode-fields: TOP_LEVEL_HEADERS,BODY_PLAIN_TEXT
           output-fields: TOP_LEVEL_HEADERS,BODY_PLAIN_TEXT
           select-keys: 'TOP_LEVEL_HEADERS:From,Subject'
           limit: ${{ inputs.limit }}
-          encryption-key: ${{ secrets.W3_SECRET_DEMO_ENCRYPTION_KEY }}
+          encrypt-outputs: 'response'
+          encryption-key: ${{ env.ENCRYPTION_KEY }}
 
       - name: Format email list
         id: format
         env:
-          QUERY_RESULT: ${{ steps.query.outputs.response }}
+          ENCRYPTED_RESPONSE: ${{ steps.query.outputs.response }}
         run: |
+          QUERY_RESULT=$(node scripts/decrypt.js "$ENCRYPTION_KEY" "$ENCRYPTED_RESPONSE")
           summary=$(echo "$QUERY_RESULT" | jq -r '
             [.[] |
               "From: \(.TOP_LEVEL_HEADERS.From // "unknown")\nSubject: \(.TOP_LEVEL_HEADERS.Subject // "no subject")\nBody: \(.BODY_PLAIN_TEXT // "empty")\n---"
@@ -145,8 +157,13 @@ jobs:
     name: Summarize with AI
     runs-on: ubuntu-latest
     needs: fetch-emails
+    env:
+      ENCRYPTION_KEY: ${{ secrets.W3_SECRET_DEMO_ENCRYPTION_KEY }}
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Build AI request body
         id: build-ai
         env:
@@ -181,28 +198,17 @@ jobs:
             {"Content-Type": "application/json",
              "Authorization": "Bearer ${{ secrets.W3_SECRET_DEMO_HYPERBOLIC_API_KEY }}"}
           body: ${{ steps.build-ai.outputs.body }}
-          encryption-key: ${{ secrets.W3_SECRET_DEMO_ENCRYPTION_KEY }}
+          encrypt-outputs: 'response'
+          encryption-key: ${{ env.ENCRYPTION_KEY }}
 
       - name: Build fallback request body
         id: build-fallback
         if: steps.primary.outcome == 'failure'
         env:
-          PROMPT: ${{ inputs.prompt }}
-          EMAIL_SUMMARY: ${{ needs.fetch-emails.outputs.email-summary }}
+          PRIMARY_BODY: ${{ steps.build-ai.outputs.body }}
           MODEL: ${{ inputs.fallback-model }}
-          MAX_TOKENS: ${{ inputs.max-tokens }}
-          TEMPERATURE: ${{ inputs.temperature }}
-          TOP_P: ${{ inputs.top-p }}
         run: |
-          BODY=$(jq -n \
-            --arg model "$MODEL" \
-            --arg prompt "$PROMPT
-
-          $EMAIL_SUMMARY" \
-            --argjson max_tokens "${MAX_TOKENS}" \
-            --argjson temperature "${TEMPERATURE}" \
-            --argjson top_p "${TOP_P}" \
-            '{model: $model, messages: [{role: "user", content: $prompt}], max_tokens: $max_tokens, temperature: $temperature, top_p: $top_p, stream: false}')
+          BODY=$(echo "$PRIMARY_BODY" | jq --arg model "$MODEL" '.model = $model')
           echo "body<<BODY_EOF" >> "$GITHUB_OUTPUT"
           echo "$BODY" >> "$GITHUB_OUTPUT"
           echo "BODY_EOF" >> "$GITHUB_OUTPUT"
@@ -219,21 +225,24 @@ jobs:
             {"Content-Type": "application/json",
              "Authorization": "Bearer ${{ secrets.W3_SECRET_DEMO_HYPERBOLIC_API_KEY }}"}
           body: ${{ steps.build-fallback.outputs.body }}
-          encryption-key: ${{ secrets.W3_SECRET_DEMO_ENCRYPTION_KEY }}
+          encrypt-outputs: 'response'
+          encryption-key: ${{ env.ENCRYPTION_KEY }}
 
       - name: Log Output
         env:
           PRIMARY_RESPONSE: ${{ steps.primary.outputs.response }}
           FALLBACK_RESPONSE: ${{ steps.fallback.outputs.response }}
         run: |
+          PRIMARY=$(node scripts/decrypt.js "$ENCRYPTION_KEY" "$PRIMARY_RESPONSE" 2>/dev/null) || PRIMARY=""
+          FALLBACK=$(node scripts/decrypt.js "$ENCRYPTION_KEY" "$FALLBACK_RESPONSE" 2>/dev/null) || FALLBACK=""
           echo "=== Primary Model ==="
-          echo "$PRIMARY_RESPONSE" | jq -r '
+          echo "$PRIMARY" | jq -r '
             "Reasoning: \(.choices[0].message.reasoning_content // "none")",
             "Response: \(.choices[0].message.content // "none")"
-          ' 2>/dev/null || echo "Response: ${PRIMARY_RESPONSE:-none}"
+          ' 2>/dev/null || echo "Response: ${PRIMARY:-none}"
           echo ""
           echo "=== Fallback Model ==="
-          echo "$FALLBACK_RESPONSE" | jq -r '
+          echo "$FALLBACK" | jq -r '
             "Reasoning: \(.choices[0].message.reasoning_content // "none")",
             "Response: \(.choices[0].message.content // "none")"
-          ' 2>/dev/null || echo "Response: ${FALLBACK_RESPONSE:-none}"
+          ' 2>/dev/null || echo "Response: ${FALLBACK:-none}"
