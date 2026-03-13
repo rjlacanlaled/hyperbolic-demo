@@ -10,6 +10,10 @@ function deriveKey(passphrase) {
 /**
  * Encrypt a string using AES-256-GCM.
  * Returns base64(iv + authTag + ciphertext).
+ *
+ * @param {string} plaintext - The plaintext string to encrypt.
+ * @param {string} key - The passphrase used to derive the encryption key.
+ * @returns {string} Base64-encoded string containing the IV, auth tag, and ciphertext.
  */
 export function encryptValue(plaintext, key) {
   const keyHash = deriveKey(key)
@@ -28,6 +32,11 @@ export function encryptValue(plaintext, key) {
 /**
  * Decrypt an AES-256-GCM ciphertext.
  * Expects base64(iv + authTag + ciphertext).
+ *
+ * @param {string} ciphertext - Base64-encoded string containing the IV, auth tag, and ciphertext.
+ * @param {string} key - The passphrase used to derive the decryption key.
+ * @returns {string} The decrypted plaintext string.
+ * @throws {Error} If decryption fails (e.g. wrong key or corrupted data).
  */
 export function decryptValue(ciphertext, key) {
   const keyHash = deriveKey(key)
@@ -48,6 +57,10 @@ export function decryptValue(ciphertext, key) {
 /**
  * Returns a function that wraps core.setOutput with encryption.
  * If encryptionKey is provided, values are encrypted automatically.
+ *
+ * @param {object} core - The `@actions/core` module used to set outputs.
+ * @param {string|undefined} encryptionKey - Optional passphrase; when provided, all output values are encrypted.
+ * @returns {(name: string, value: string) => void} A function that sets an action output, encrypting the value if a key was given.
  */
 export function createEncryptedOutput(core, encryptionKey) {
   return (name, value) => {
@@ -61,6 +74,10 @@ export function createEncryptedOutput(core, encryptionKey) {
 
 /**
  * Try to decrypt a value. Returns decrypted string on success, null on failure.
+ *
+ * @param {string} value - Base64-encoded encrypted string to attempt decryption on.
+ * @param {string} key - The passphrase used to derive the decryption key.
+ * @returns {string|null} The decrypted plaintext string, or `null` if decryption fails.
  */
 export function tryDecrypt(value, key) {
   try {
