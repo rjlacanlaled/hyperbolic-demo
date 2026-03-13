@@ -1,10 +1,20 @@
 import * as core from '@actions/core'
-import { createEncryptedOutput, tryDecrypt } from '../crypto.js'
+import { encryptValue, tryDecrypt } from '../crypto.js'
 import {
   decodeBase64Url,
   parseSelectKeys,
   extractKeys
 } from '../base64-decode/main.js'
+
+function getNestedValue(obj, path) {
+  const parts = path.split('.')
+  let current = obj
+  for (const part of parts) {
+    if (current === undefined || current === null) return undefined
+    current = current[part]
+  }
+  return current
+}
 
 function decryptAtPath(obj, pathParts, encryptionKey) {
   let current = obj
@@ -36,7 +46,6 @@ function decryptAtPath(obj, pathParts, encryptionKey) {
 export async function run() {
   try {
     const encryptionKey = core.getInput('encryption-key')
-    const setEncryptedOutput = createEncryptedOutput(core, encryptionKey)
 
     const url = core.getInput('url', { required: true })
     const method = core.getInput('method') || 'POST'
@@ -90,23 +99,35 @@ export async function run() {
       `Response: ${response.status} | Size: ${responseBytes} bytes (${(responseBytes / 1024).toFixed(1)} KB)`
     )
 
-    core.setOutput('status', response.status.toString())
+    core.setOutput('success', response.ok ? 'true' : 'false')
+    core.setOutput('status-code', response.status.toString())
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${responseBody}`)
     }
 
-    // Extract individual JSON fields as separate outputs (response-fields — will be replaced by extract-outputs in Task 3)
-    const responseFields = core.getInput('response-fields')
-    if (responseFields) {
+    const extractOutputs = core.getInput('extract-outputs')
+    const encryptOutputsList = core.getInput('encrypt-outputs')
+    const fieldsToEncrypt = encryptOutputsList
+      ? encryptOutputsList.split(',').map((f) => f.trim())
+      : []
+
+    function setOutput(name, value) {
+      if (fieldsToEncrypt.includes(name) && encryptionKey) {
+        core.setOutput(name, encryptValue(value, encryptionKey))
+      } else {
+        core.setOutput(name, value)
+      }
+    }
+
+    if (extractOutputs) {
       const parsed = JSON.parse(responseBody)
-      for (const field of responseFields.split(',').map((f) => f.trim())) {
-        if (parsed[field] !== undefined) {
-          const value =
-            typeof parsed[field] === 'string'
-              ? parsed[field]
-              : JSON.stringify(parsed[field])
-          setEncryptedOutput(field, value)
+      for (const fieldPath of extractOutputs.split(',').map((f) => f.trim())) {
+        const value = getNestedValue(parsed, fieldPath)
+        if (value !== undefined) {
+          const leafName = fieldPath.split('.').pop()
+          const strValue = typeof value === 'string' ? value : JSON.stringify(value)
+          setOutput(leafName, strValue)
         }
       }
     }
@@ -168,8 +189,9 @@ export async function run() {
       )
     }
 
-    setEncryptedOutput('response', processedOutput)
-    core.setOutput('encrypted', encryptionKey ? 'true' : 'false')
+    if (!extractOutputs) {
+      setOutput('response', processedOutput)
+    }
   } catch (error) {
     core.error(error.stack || error.toString())
     core.setFailed(error.message)

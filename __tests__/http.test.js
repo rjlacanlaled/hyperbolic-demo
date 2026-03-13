@@ -47,9 +47,9 @@ describe('http action', () => {
         body: '{"key":"value"}'
       })
     )
-    expect(core.setOutput).toHaveBeenCalledWith('status', '200')
+    expect(core.setOutput).toHaveBeenCalledWith('success', 'true')
+    expect(core.setOutput).toHaveBeenCalledWith('status-code', '200')
     expect(core.setOutput).toHaveBeenCalledWith('response', '{"result": "ok"}')
-    expect(core.setOutput).toHaveBeenCalledWith('encrypted', 'false')
   })
 
   it('makes a GET request without body', async () => {
@@ -91,7 +91,8 @@ describe('http action', () => {
 
     await run()
 
-    expect(core.setOutput).toHaveBeenCalledWith('status', '500')
+    expect(core.setOutput).toHaveBeenCalledWith('success', 'false')
+    expect(core.setOutput).toHaveBeenCalledWith('status-code', '500')
     expect(core.setFailed).toHaveBeenCalledWith('HTTP 500: Server Error')
   })
 
@@ -174,13 +175,121 @@ describe('http action', () => {
     expect(sentBody.auth.token).toBe('secret-value')
   })
 
-  it('encrypts response when encryption-key is provided', async () => {
+  it('extracts fields via extract-outputs and does not output full response', async () => {
     core.getInput.mockImplementation((name) => {
       const inputs = {
         url: 'https://example.com/api',
         method: 'POST',
         headers: '{}',
-        'encryption-key': 'test-secret-key'
+        body: '{}',
+        'extract-outputs': 'sessionId,accessToken'
+      }
+      return inputs[name] || ''
+    })
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => '{"sessionId": "abc", "accessToken": "xyz", "extra": "ignored"}'
+    })
+
+    await run()
+
+    expect(core.setOutput).toHaveBeenCalledWith('sessionId', 'abc')
+    expect(core.setOutput).toHaveBeenCalledWith('accessToken', 'xyz')
+    expect(core.setOutput).toHaveBeenCalledWith('success', 'true')
+    expect(core.setOutput).toHaveBeenCalledWith('status-code', '200')
+    // No full response output
+    const responseCall = core.setOutput.mock.calls.find((c) => c[0] === 'response')
+    expect(responseCall).toBeUndefined()
+  })
+
+  it('extracts nested fields via dot notation', async () => {
+    core.getInput.mockImplementation((name) => {
+      const inputs = {
+        url: 'https://example.com/api',
+        method: 'POST',
+        headers: '{}',
+        body: '{}',
+        'extract-outputs': 'data.auth.sessionId'
+      }
+      return inputs[name] || ''
+    })
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => '{"data": {"auth": {"sessionId": "deep-value"}}}'
+    })
+
+    await run()
+
+    expect(core.setOutput).toHaveBeenCalledWith('sessionId', 'deep-value')
+  })
+
+  it('encrypts only outputs listed in encrypt-outputs', async () => {
+    const { decryptValue } = await import('../src/crypto.js')
+    core.getInput.mockImplementation((name) => {
+      const inputs = {
+        url: 'https://example.com/api',
+        method: 'POST',
+        headers: '{}',
+        body: '{}',
+        'extract-outputs': 'sessionId,accessToken',
+        'encrypt-outputs': 'sessionId',
+        'encryption-key': 'test-key'
+      }
+      return inputs[name] || ''
+    })
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => '{"sessionId": "secret", "accessToken": "public"}'
+    })
+
+    await run()
+
+    // sessionId should be encrypted
+    const sessionCall = core.setOutput.mock.calls.find((c) => c[0] === 'sessionId')
+    expect(sessionCall[1]).not.toBe('secret')
+    expect(decryptValue(sessionCall[1], 'test-key')).toBe('secret')
+
+    // accessToken should be plaintext
+    expect(core.setOutput).toHaveBeenCalledWith('accessToken', 'public')
+  })
+
+  it('encrypts full response when listed in encrypt-outputs', async () => {
+    const { decryptValue } = await import('../src/crypto.js')
+    core.getInput.mockImplementation((name) => {
+      const inputs = {
+        url: 'https://example.com/api',
+        method: 'POST',
+        headers: '{}',
+        body: '{}',
+        'encrypt-outputs': 'response',
+        'encryption-key': 'test-key'
+      }
+      return inputs[name] || ''
+    })
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => '{"data": "sensitive"}'
+    })
+
+    await run()
+
+    const responseCall = core.setOutput.mock.calls.find((c) => c[0] === 'response')
+    expect(responseCall[1]).not.toBe('{"data": "sensitive"}')
+    expect(decryptValue(responseCall[1], 'test-key')).toBe('{"data": "sensitive"}')
+  })
+
+  it('encrypts response when encryption-key is provided and encrypt-outputs includes response', async () => {
+    core.getInput.mockImplementation((name) => {
+      const inputs = {
+        url: 'https://example.com/api',
+        method: 'POST',
+        headers: '{}',
+        'encryption-key': 'test-secret-key',
+        'encrypt-outputs': 'response'
       }
       return inputs[name] || ''
     })
@@ -192,7 +301,6 @@ describe('http action', () => {
 
     await run()
 
-    expect(core.setOutput).toHaveBeenCalledWith('encrypted', 'true')
     const responseCall = core.setOutput.mock.calls.find(
       (c) => c[0] === 'response'
     )
