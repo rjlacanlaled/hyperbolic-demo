@@ -39,7 +39,7 @@ jobs:
           additional_permissions: |
             actions: read
 
-  # Claude addresses Copilot's review feedback automatically
+  # Claude addresses Copilot's review feedback, then re-requests Copilot review
   address-copilot-review:
     if: |
       github.event_name == 'pull_request_review' &&
@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: read
       id-token: write
       actions: read
@@ -70,6 +70,14 @@ jobs:
             3. Reply to each comment explaining what you changed
             4. If no actionable feedback remains, comment that the PR is ready for human review
 
+      - name: Re-request Copilot review
+        continue-on-error: true
+        run: |
+          gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers \
+            --method POST -f "reviewers[]=copilot"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   # Auto-request Copilot review on non-draft PRs
   request-copilot-review:
     if: |
@@ -81,6 +89,8 @@ jobs:
     steps:
       - name: Request Copilot review
         continue-on-error: true
-        run: gh pr edit ${{ github.event.pull_request.number }} --add-reviewer @copilot --repo ${{ github.repository }}
+        run: |
+          gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers \
+            --method POST -f "reviewers[]=copilot"
         env:
           GH_TOKEN: ${{ github.token }}
