@@ -27527,6 +27527,10 @@ function deriveKey(passphrase) {
 /**
  * Encrypt a string using AES-256-GCM.
  * Returns base64(iv + authTag + ciphertext).
+ *
+ * @param {string} plaintext - The plaintext string to encrypt.
+ * @param {string} key - The passphrase used to derive the encryption key.
+ * @returns {string} Base64-encoded string containing the IV, auth tag, and ciphertext.
  */
 function encryptValue(plaintext, key) {
   const keyHash = deriveKey(key);

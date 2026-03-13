@@ -27502,6 +27502,10 @@ function deriveKey(passphrase) {
 /**
  * Encrypt a string using AES-256-GCM.
  * Returns base64(iv + authTag + ciphertext).
+ *
+ * @param {string} plaintext - The plaintext string to encrypt.
+ * @param {string} key - The passphrase used to derive the encryption key.
+ * @returns {string} Base64-encoded string containing the IV, auth tag, and ciphertext.
  */
 function encryptValue(plaintext, key) {
   const keyHash = deriveKey(key);
@@ -27520,6 +27524,11 @@ function encryptValue(plaintext, key) {
 /**
  * Decrypt an AES-256-GCM ciphertext.
  * Expects base64(iv + authTag + ciphertext).
+ *
+ * @param {string} ciphertext - Base64-encoded string containing the IV, auth tag, and ciphertext.
+ * @param {string} key - The passphrase used to derive the decryption key.
+ * @returns {string} The decrypted plaintext string.
+ * @throws {Error} Throws if decryption fails (e.g. wrong key or corrupted data).
  */
 function decryptValue(ciphertext, key) {
   const keyHash = deriveKey(key);
@@ -27539,6 +27548,10 @@ function decryptValue(ciphertext, key) {
 
 /**
  * Try to decrypt a value. Returns decrypted string on success, null on failure.
+ *
+ * @param {string} value - Base64-encoded encrypted string to attempt decryption on.
+ * @param {string} key - The passphrase used to derive the decryption key.
+ * @returns {string|null} The decrypted plaintext string, or null if decryption fails.
  */
 function tryDecrypt(value, key) {
   try {
@@ -27717,7 +27730,8 @@ async function run() {
         const value = getNestedValue(parsed, fieldPath);
         if (value !== undefined) {
           const leafName = fieldPath.split('.').pop();
-          const strValue = typeof value === 'string' ? value : JSON.stringify(value);
+          const strValue =
+            typeof value === 'string' ? value : JSON.stringify(value);
           setOutput(leafName, strValue);
         }
       }

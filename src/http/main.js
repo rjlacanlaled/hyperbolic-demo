@@ -137,7 +137,8 @@ export async function run() {
         const value = getNestedValue(parsed, fieldPath)
         if (value !== undefined) {
           const leafName = fieldPath.split('.').pop()
-          const strValue = typeof value === 'string' ? value : JSON.stringify(value)
+          const strValue =
+            typeof value === 'string' ? value : JSON.stringify(value)
           setOutput(leafName, strValue)
         }
       }
