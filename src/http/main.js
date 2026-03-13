@@ -122,14 +122,8 @@ export async function run() {
 
     if (extractOutputs) {
       const parsed = JSON.parse(responseBody)
-      core.info(
-        `extract-outputs: parsed type=${typeof parsed}, isArray=${Array.isArray(parsed)}, keys=${typeof parsed === 'object' && parsed !== null ? Object.keys(parsed).join(',') : 'N/A'}`
-      )
       for (const fieldPath of extractOutputs.split(',').map((f) => f.trim())) {
         const value = getNestedValue(parsed, fieldPath)
-        core.info(
-          `extract-outputs: field="${fieldPath}" found=${value !== undefined} type=${typeof value}`
-        )
         if (value !== undefined) {
           const leafName = fieldPath.split('.').pop()
           const strValue = typeof value === 'string' ? value : JSON.stringify(value)

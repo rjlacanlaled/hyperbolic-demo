@@ -96,19 +96,18 @@ jobs:
           headers: >-
             {"sid": "${{ steps.login.outputs.sessionId }}"}
           decrypt-inputs: 'headers.sid'
-          extract-outputs: 'biscuit'
-          encrypt-outputs: 'biscuit'
+          encrypt-outputs: 'response'
           encryption-key: ${{ env.ENCRYPTION_KEY }}
 
       - name: Build query body
         id: build-query
         env:
-          ENCRYPTED_BISCUIT: ${{ steps.biscuit.outputs.biscuit }}
+          ENCRYPTED_RESPONSE: ${{ steps.biscuit.outputs.response }}
           SQL_QUERY: ${{ inputs.sql-query }}
           USER_ID: ${{ inputs.user-id }}
           RESOURCES: ${{ inputs.resources }}
         run: |
-          BISCUIT=$(node scripts/decrypt.js "$ENCRYPTION_KEY" "$ENCRYPTED_BISCUIT")
+          BISCUIT=$(node scripts/decrypt.js "$ENCRYPTION_KEY" "$ENCRYPTED_RESPONSE" | jq -r '.biscuits[0]')
           RESOLVED_SQL=$(echo "$SQL_QUERY" | sed "s/{userId}/$USER_ID/g")
           RESOURCES_JSON=$(echo "$RESOURCES" | jq -R 'split(",") | map(ltrimstr(" ") | rtrimstr(" "))')
           BODY=$(jq -cn \
