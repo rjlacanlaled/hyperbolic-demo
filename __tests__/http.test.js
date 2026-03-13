@@ -44,7 +44,7 @@ describe('http action', () => {
       expect.objectContaining({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: '{"key": "value"}'
+        body: '{"key":"value"}'
       })
     )
     expect(core.setOutput).toHaveBeenCalledWith('status', '200')
@@ -93,6 +93,85 @@ describe('http action', () => {
 
     expect(core.setOutput).toHaveBeenCalledWith('status', '500')
     expect(core.setFailed).toHaveBeenCalledWith('HTTP 500: Server Error')
+  })
+
+  it('decrypts value at decrypt-inputs path in headers', async () => {
+    const { encryptValue } = await import('../src/crypto.js')
+    const encrypted = encryptValue('my-session-id', 'test-key')
+    core.getInput.mockImplementation((name) => {
+      const inputs = {
+        url: 'https://example.com/api',
+        method: 'GET',
+        headers: `{"sid": "${encrypted}", "Content-Type": "application/json"}`,
+        'decrypt-inputs': 'headers.sid',
+        'encryption-key': 'test-key'
+      }
+      return inputs[name] || ''
+    })
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => '{"ok": true}'
+    })
+
+    await run()
+
+    const fetchCall = global.fetch.mock.calls[0]
+    expect(fetchCall[1].headers.sid).toBe('my-session-id')
+    expect(fetchCall[1].headers['Content-Type']).toBe('application/json')
+  })
+
+  it('decrypts Bearer token in Authorization header', async () => {
+    const { encryptValue } = await import('../src/crypto.js')
+    const encrypted = encryptValue('my-token', 'test-key')
+    core.getInput.mockImplementation((name) => {
+      const inputs = {
+        url: 'https://example.com/api',
+        method: 'POST',
+        headers: `{"Authorization": "Bearer ${encrypted}"}`,
+        body: '{}',
+        'decrypt-inputs': 'headers.Authorization',
+        'encryption-key': 'test-key'
+      }
+      return inputs[name] || ''
+    })
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => '{"ok": true}'
+    })
+
+    await run()
+
+    const fetchCall = global.fetch.mock.calls[0]
+    expect(fetchCall[1].headers.Authorization).toBe('Bearer my-token')
+  })
+
+  it('decrypts nested path in body', async () => {
+    const { encryptValue } = await import('../src/crypto.js')
+    const encrypted = encryptValue('secret-value', 'test-key')
+    core.getInput.mockImplementation((name) => {
+      const inputs = {
+        url: 'https://example.com/api',
+        method: 'POST',
+        headers: '{"Content-Type": "application/json"}',
+        body: `{"auth": {"token": "${encrypted}"}}`,
+        'decrypt-inputs': 'body.auth.token',
+        'encryption-key': 'test-key'
+      }
+      return inputs[name] || ''
+    })
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => '{"ok": true}'
+    })
+
+    await run()
+
+    const fetchCall = global.fetch.mock.calls[0]
+    const sentBody = JSON.parse(fetchCall[1].body)
+    expect(sentBody.auth.token).toBe('secret-value')
   })
 
   it('encrypts response when encryption-key is provided', async () => {

@@ -1,27 +1,79 @@
 import * as core from '@actions/core'
-import {
-  createEncryptedOutput,
-  getInput,
-  decryptHeaders
-} from '../crypto.js'
+import { createEncryptedOutput, tryDecrypt } from '../crypto.js'
 import {
   decodeBase64Url,
   parseSelectKeys,
   extractKeys
 } from '../base64-decode/main.js'
 
+function decryptAtPath(obj, pathParts, encryptionKey) {
+  let current = obj
+  for (let i = 0; i < pathParts.length - 1; i++) {
+    if (current[pathParts[i]] === undefined) return obj
+    current = current[pathParts[i]]
+  }
+  const lastKey = pathParts[pathParts.length - 1]
+  const value = current[lastKey]
+  if (typeof value !== 'string') return obj
+
+  // Handle Bearer prefix
+  if (value.startsWith('Bearer ')) {
+    const token = value.slice(7)
+    const decrypted = tryDecrypt(token, encryptionKey)
+    if (decrypted !== null) {
+      current[lastKey] = `Bearer ${decrypted}`
+    }
+    return obj
+  }
+
+  const decrypted = tryDecrypt(value, encryptionKey)
+  if (decrypted !== null) {
+    current[lastKey] = decrypted
+  }
+  return obj
+}
+
 export async function run() {
   try {
     const encryptionKey = core.getInput('encryption-key')
-
     const setEncryptedOutput = createEncryptedOutput(core, encryptionKey)
 
     const url = core.getInput('url', { required: true })
     const method = core.getInput('method') || 'POST'
-    const headersInput = getInput(core, encryptionKey, 'headers') || '{}'
-    const body = getInput(core, encryptionKey, 'body')
+    const headersRaw = core.getInput('headers') || '{}'
+    const bodyRaw = core.getInput('body')
 
-    const headers = decryptHeaders(headersInput, encryptionKey)
+    // Parse mutable copies
+    const inputStore = {
+      headers: JSON.parse(headersRaw)
+    }
+
+    // Try parsing body as JSON for path-based decryption
+    let bodyIsJson = false
+    if (bodyRaw) {
+      try {
+        inputStore.body = JSON.parse(bodyRaw)
+        bodyIsJson = true
+      } catch {
+        inputStore.body = bodyRaw
+      }
+    }
+
+    // decrypt-inputs: path-based decryption
+    const decryptInputs = core.getInput('decrypt-inputs')
+    if (decryptInputs && encryptionKey) {
+      for (const path of decryptInputs.split(',').map((p) => p.trim())) {
+        const parts = path.split('.')
+        const inputName = parts[0]
+        const fieldParts = parts.slice(1)
+        if (inputStore[inputName] !== undefined && fieldParts.length > 0) {
+          decryptAtPath(inputStore[inputName], fieldParts, encryptionKey)
+        }
+      }
+    }
+
+    const headers = inputStore.headers
+    const body = bodyIsJson ? JSON.stringify(inputStore.body) : inputStore.body
 
     core.info(`${method} ${url}`)
 
@@ -44,7 +96,7 @@ export async function run() {
       throw new Error(`HTTP ${response.status}: ${responseBody}`)
     }
 
-    // Extract individual JSON fields as separate outputs
+    // Extract individual JSON fields as separate outputs (response-fields — will be replaced by extract-outputs in Task 3)
     const responseFields = core.getInput('response-fields')
     if (responseFields) {
       const parsed = JSON.parse(responseBody)
