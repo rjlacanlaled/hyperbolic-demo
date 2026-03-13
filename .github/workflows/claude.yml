@@ -45,7 +45,7 @@ jobs:
   address-copilot-review:
     if: |
       github.event_name == 'pull_request_review' &&
-      github.event.review.user.login == 'copilot-pull-request-reviewer[bot]'
+      contains(github.event.review.user.login, 'copilot')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -95,8 +95,9 @@ jobs:
             Please:
             1. Read all of Copilot's review comments on this PR
             2. Address each actionable suggestion by making code changes
-            3. Reply to each comment explaining what you changed
+            3. Reply to each comment explaining what you changed and resolve the conversation
             4. After pushing fixes, comment that changes have been made and request re-review
+            5. Also check CI status — if any checks failed, read the logs and fix those too
 
       - name: Re-request Copilot review
         if: steps.check.outputs.has_feedback == 'true'
