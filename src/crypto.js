@@ -60,17 +60,55 @@ export function createEncryptedOutput(core, encryptionKey) {
 }
 
 /**
+ * Try to decrypt a value. Returns decrypted string on success, null on failure.
+ */
+export function tryDecrypt(value, key) {
+  try {
+    return decryptValue(value, key)
+  } catch {
+    return null
+  }
+}
+
+/**
  * Get an input value, automatically decrypting if encryption key is set.
  * If decryption fails (input wasn't encrypted), returns the raw value.
  */
 export function getInput(core, encryptionKey, name, options) {
   const value = core.getInput(name, options)
   if (encryptionKey && value) {
-    try {
-      return decryptValue(value, encryptionKey)
-    } catch {
-      return value
-    }
+    return tryDecrypt(value, encryptionKey) ?? value
   }
   return value
+}
+
+/**
+ * Parse a headers JSON string, auto-decrypting individual header values.
+ * Handles "Bearer ENCRYPTED" pattern for Authorization headers.
+ */
+export function decryptHeaders(headersJson, encryptionKey) {
+  const headers = JSON.parse(headersJson)
+  if (!encryptionKey) return headers
+
+  for (const [key, value] of Object.entries(headers)) {
+    if (typeof value !== 'string') continue
+
+    // Try decrypting the whole value
+    const decrypted = tryDecrypt(value, encryptionKey)
+    if (decrypted !== null) {
+      headers[key] = decrypted
+      continue
+    }
+
+    // Handle "Bearer ENCRYPTED_BLOB" pattern
+    if (value.startsWith('Bearer ')) {
+      const token = value.slice(7)
+      const decryptedToken = tryDecrypt(token, encryptionKey)
+      if (decryptedToken !== null) {
+        headers[key] = `Bearer ${decryptedToken}`
+      }
+    }
+  }
+
+  return headers
 }

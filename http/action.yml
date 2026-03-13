@@ -33,13 +33,18 @@ inputs:
     description: Limit number of rows in JSON array response (0 for no limit)
     required: false
     default: '0'
+  response-fields:
+    description: Comma-separated JSON field names to extract as separate outputs (field-NAME)
+    required: false
   encryption-key:
-    description: AES-256-GCM key - encrypts outputs and auto-decrypts inputs
+    description: AES-256-GCM key - encrypts outputs and auto-decrypts inputs/header values
     required: false
 
 outputs:
   response:
     description: Response body as string (encrypted if encryption-key provided)
+  field-*:
+    description: Individual response fields extracted via response-fields (encrypted if encryption-key provided)
   status:
     description: HTTP status code
   encrypted:

@@ -77,6 +77,7 @@ jobs:
           body: >-
             {"userId": "${{ secrets.W3_SECRET_DEMO_SXT_USER_ID }}",
              "password": "${{ secrets.W3_SECRET_DEMO_SXT_PASSWORD }}"}
+          response-fields: sessionId,accessToken
           encryption-key: ${{ secrets.W3_SECRET_DEMO_ENCRYPTION_KEY }}
 
       - name: Fetch Biscuit
@@ -87,7 +88,8 @@ jobs:
             https://proxy.api.makeinfinite.dev/biscuits/generated/${{ secrets.W3_SECRET_DEMO_SXT_BISCUIT_NAME }}
           method: GET
           headers: >-
-            {"sid": "${{ fromJSON(steps.login.outputs.response).sessionId }}"}
+            {"sid": "${{ steps.login.outputs.field-sessionId }}"}
+          response-fields: biscuit
           encryption-key: ${{ secrets.W3_SECRET_DEMO_ENCRYPTION_KEY }}
 
       - name: Build query body
@@ -95,7 +97,7 @@ jobs:
         env:
           SQL_QUERY: ${{ inputs.sql-query }}
           USER_ID: ${{ inputs.user-id }}
-          BISCUIT: ${{ fromJSON(steps.biscuit.outputs.response).biscuit }}
+          BISCUIT: ${{ steps.biscuit.outputs.field-biscuit }}
           RESOURCES: ${{ inputs.resources }}
         run: |
           RESOLVED_SQL=$(echo "$SQL_QUERY" | sed "s/{userId}/$USER_ID/g")
@@ -115,7 +117,7 @@ jobs:
           method: POST
           headers: >-
             {"Content-Type": "application/json",
-             "Authorization": "Bearer ${{ fromJSON(steps.login.outputs.response).accessToken }}"}
+             "Authorization": "Bearer ${{ steps.login.outputs.field-accessToken }}"}
           body: ${{ steps.build-query.outputs.body }}
           decode-fields: TOP_LEVEL_HEADERS,BODY_PLAIN_TEXT
           output-fields: TOP_LEVEL_HEADERS,BODY_PLAIN_TEXT

@@ -1,5 +1,5 @@
 import require$$0 from 'os';
-import require$$0$1, { randomBytes, createCipheriv, createDecipheriv, createHash } from 'crypto';
+import require$$0$1, { randomBytes, createCipheriv, createHash, createDecipheriv } from 'crypto';
 import require$$1, { readFileSync } from 'fs';
 import require$$1$5 from 'path';
 import require$$2 from 'http';
@@ -27577,17 +27577,24 @@ function createEncryptedOutput(core, encryptionKey) {
 }
 
 /**
+ * Try to decrypt a value. Returns decrypted string on success, null on failure.
+ */
+function tryDecrypt(value, key) {
+  try {
+    return decryptValue(value, key)
+  } catch {
+    return null
+  }
+}
+
+/**
  * Get an input value, automatically decrypting if encryption key is set.
  * If decryption fails (input wasn't encrypted), returns the raw value.
  */
 function getInput(core, encryptionKey, name, options) {
   const value = core.getInput(name, options);
   if (encryptionKey && value) {
-    try {
-      return decryptValue(value, encryptionKey)
-    } catch {
-      return value
-    }
+    return tryDecrypt(value, encryptionKey) ?? value
   }
   return value
 }

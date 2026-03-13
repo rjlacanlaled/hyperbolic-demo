@@ -1,5 +1,5 @@
 import require$$0 from 'os';
-import require$$0$1, { randomBytes, createCipheriv, createDecipheriv, createHash } from 'crypto';
+import require$$0$1, { randomBytes, createCipheriv, createHash, createDecipheriv } from 'crypto';
 import require$$1 from 'fs';
 import require$$1$5 from 'path';
 import require$$2 from 'http';
@@ -27577,19 +27577,57 @@ function createEncryptedOutput(core, encryptionKey) {
 }
 
 /**
+ * Try to decrypt a value. Returns decrypted string on success, null on failure.
+ */
+function tryDecrypt(value, key) {
+  try {
+    return decryptValue(value, key)
+  } catch {
+    return null
+  }
+}
+
+/**
  * Get an input value, automatically decrypting if encryption key is set.
  * If decryption fails (input wasn't encrypted), returns the raw value.
  */
 function getInput(core, encryptionKey, name, options) {
   const value = core.getInput(name, options);
   if (encryptionKey && value) {
-    try {
-      return decryptValue(value, encryptionKey)
-    } catch {
-      return value
-    }
+    return tryDecrypt(value, encryptionKey) ?? value
   }
   return value
+}
+
+/**
+ * Parse a headers JSON string, auto-decrypting individual header values.
+ * Handles "Bearer ENCRYPTED" pattern for Authorization headers.
+ */
+function decryptHeaders(headersJson, encryptionKey) {
+  const headers = JSON.parse(headersJson);
+  if (!encryptionKey) return headers
+
+  for (const [key, value] of Object.entries(headers)) {
+    if (typeof value !== 'string') continue
+
+    // Try decrypting the whole value
+    const decrypted = tryDecrypt(value, encryptionKey);
+    if (decrypted !== null) {
+      headers[key] = decrypted;
+      continue
+    }
+
+    // Handle "Bearer ENCRYPTED_BLOB" pattern
+    if (value.startsWith('Bearer ')) {
+      const token = value.slice(7);
+      const decryptedToken = tryDecrypt(token, encryptionKey);
+      if (decryptedToken !== null) {
+        headers[key] = `Bearer ${decryptedToken}`;
+      }
+    }
+  }
+
+  return headers
 }
 
 /**
@@ -27638,11 +27676,10 @@ async function run() {
 
     const url = coreExports.getInput('url', { required: true });
     const method = coreExports.getInput('method') || 'POST';
-    const headersInput =
-      getInput(core$1, encryptionKey, 'headers') || '{}';
+    const headersInput = getInput(core$1, encryptionKey, 'headers') || '{}';
     const body = getInput(core$1, encryptionKey, 'body');
 
-    const headers = JSON.parse(headersInput);
+    const headers = decryptHeaders(headersInput, encryptionKey);
 
     coreExports.info(`${method} ${url}`);
 
@@ -27663,6 +27700,21 @@ async function run() {
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${responseBody}`)
+    }
+
+    // Extract individual JSON fields as separate outputs
+    const responseFields = coreExports.getInput('response-fields');
+    if (responseFields) {
+      const parsed = JSON.parse(responseBody);
+      for (const field of responseFields.split(',').map((f) => f.trim())) {
+        if (parsed[field] !== undefined) {
+          const value =
+            typeof parsed[field] === 'string'
+              ? parsed[field]
+              : JSON.stringify(parsed[field]);
+          setEncryptedOutput(`field-${field}`, value);
+        }
+      }
     }
 
     // Optional post-processing for JSON array responses

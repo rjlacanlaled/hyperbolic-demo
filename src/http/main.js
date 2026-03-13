@@ -1,5 +1,9 @@
 import * as core from '@actions/core'
-import { createEncryptedOutput, getInput } from '../crypto.js'
+import {
+  createEncryptedOutput,
+  getInput,
+  decryptHeaders
+} from '../crypto.js'
 import {
   decodeBase64Url,
   parseSelectKeys,
@@ -14,11 +18,10 @@ export async function run() {
 
     const url = core.getInput('url', { required: true })
     const method = core.getInput('method') || 'POST'
-    const headersInput =
-      getInput(core, encryptionKey, 'headers') || '{}'
+    const headersInput = getInput(core, encryptionKey, 'headers') || '{}'
     const body = getInput(core, encryptionKey, 'body')
 
-    const headers = JSON.parse(headersInput)
+    const headers = decryptHeaders(headersInput, encryptionKey)
 
     core.info(`${method} ${url}`)
 
@@ -39,6 +42,21 @@ export async function run() {
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${responseBody}`)
+    }
+
+    // Extract individual JSON fields as separate outputs
+    const responseFields = core.getInput('response-fields')
+    if (responseFields) {
+      const parsed = JSON.parse(responseBody)
+      for (const field of responseFields.split(',').map((f) => f.trim())) {
+        if (parsed[field] !== undefined) {
+          const value =
+            typeof parsed[field] === 'string'
+              ? parsed[field]
+              : JSON.stringify(parsed[field])
+          setEncryptedOutput(`field-${field}`, value)
+        }
+      }
     }
 
     // Optional post-processing for JSON array responses
