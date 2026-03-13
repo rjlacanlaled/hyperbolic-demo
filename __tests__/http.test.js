@@ -282,6 +282,35 @@ describe('http action', () => {
     expect(decryptValue(responseCall[1], 'test-key')).toBe('{"data": "sensitive"}')
   })
 
+  it('decrypts entire body via decrypt-inputs: body', async () => {
+    const { encryptValue } = await import('../src/crypto.js')
+    const originalBody = '{"sqlText": "SELECT *", "biscuits": ["token123"]}'
+    const encryptedBody = encryptValue(originalBody, 'test-key')
+    core.getInput.mockImplementation((name) => {
+      const inputs = {
+        url: 'https://example.com/api',
+        method: 'POST',
+        headers: '{"Content-Type": "application/json"}',
+        body: encryptedBody,
+        'decrypt-inputs': 'body',
+        'encryption-key': 'test-key'
+      }
+      return inputs[name] || ''
+    })
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => '{"ok": true}'
+    })
+
+    await run()
+
+    const fetchCall = global.fetch.mock.calls[0]
+    const sentBody = JSON.parse(fetchCall[1].body)
+    expect(sentBody.sqlText).toBe('SELECT *')
+    expect(sentBody.biscuits).toEqual(['token123'])
+  })
+
   it('encrypts response when encryption-key is provided and encrypt-outputs includes response', async () => {
     core.getInput.mockImplementation((name) => {
       const inputs = {

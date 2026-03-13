@@ -75,8 +75,19 @@ export async function run() {
         const parts = path.split('.')
         const inputName = parts[0]
         const fieldParts = parts.slice(1)
-        if (inputStore[inputName] !== undefined && fieldParts.length > 0) {
+        if (inputStore[inputName] === undefined) continue
+        if (fieldParts.length > 0) {
           decryptAtPath(inputStore[inputName], fieldParts, encryptionKey)
+        } else if (typeof inputStore[inputName] === 'string') {
+          const decrypted = tryDecrypt(inputStore[inputName], encryptionKey)
+          if (decrypted !== null) {
+            try {
+              inputStore[inputName] = JSON.parse(decrypted)
+              if (inputName === 'body') bodyIsJson = true
+            } catch {
+              inputStore[inputName] = decrypted
+            }
+          }
         }
       }
     }

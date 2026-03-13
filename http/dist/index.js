@@ -1,5 +1,5 @@
 import require$$0 from 'os';
-import require$$0$1, { randomBytes, createCipheriv, createHash, createDecipheriv } from 'crypto';
+import require$$0$1, { randomBytes, createCipheriv, createDecipheriv, createHash } from 'crypto';
 import require$$1 from 'fs';
 import require$$1$5 from 'path';
 import require$$2 from 'http';
@@ -27655,8 +27655,19 @@ async function run() {
         const parts = path.split('.');
         const inputName = parts[0];
         const fieldParts = parts.slice(1);
-        if (inputStore[inputName] !== undefined && fieldParts.length > 0) {
+        if (inputStore[inputName] === undefined) continue
+        if (fieldParts.length > 0) {
           decryptAtPath(inputStore[inputName], fieldParts, encryptionKey);
+        } else if (typeof inputStore[inputName] === 'string') {
+          const decrypted = tryDecrypt(inputStore[inputName], encryptionKey);
+          if (decrypted !== null) {
+            try {
+              inputStore[inputName] = JSON.parse(decrypted);
+              if (inputName === 'body') bodyIsJson = true;
+            } catch {
+              inputStore[inputName] = decrypted;
+            }
+          }
         }
       }
     }

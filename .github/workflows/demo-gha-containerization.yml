@@ -115,7 +115,8 @@ jobs:
             --arg biscuit "$BISCUIT" \
             --argjson resources "$RESOURCES_JSON" \
             '{sqlText: $sql, biscuits: [$biscuit], resources: $resources}')
-          echo "body=$BODY" >> "$GITHUB_OUTPUT"
+          ENCRYPTED_BODY=$(node scripts/encrypt.js "$ENCRYPTION_KEY" "$BODY")
+          echo "body=$ENCRYPTED_BODY" >> "$GITHUB_OUTPUT"
 
       - name: Execute Query
         id: query
@@ -127,7 +128,7 @@ jobs:
             {"Content-Type": "application/json",
              "Authorization": "Bearer ${{ steps.login.outputs.accessToken }}"}
           body: ${{ steps.build-query.outputs.body }}
-          decrypt-inputs: 'headers.Authorization'
+          decrypt-inputs: 'body,headers.Authorization'
           decode-fields: TOP_LEVEL_HEADERS,BODY_PLAIN_TEXT
           output-fields: TOP_LEVEL_HEADERS,BODY_PLAIN_TEXT
           select-keys: 'TOP_LEVEL_HEADERS:From,Subject'
@@ -146,11 +147,8 @@ jobs:
               "From: \(.TOP_LEVEL_HEADERS.From // "unknown")\nSubject: \(.TOP_LEVEL_HEADERS.Subject // "no subject")\nBody: \(.BODY_PLAIN_TEXT // "empty")\n---"
             ] | join("\n")
           ')
-          {
-            echo "email-summary<<SUMMARY_EOF"
-            echo "$summary"
-            echo "SUMMARY_EOF"
-          } >> "$GITHUB_OUTPUT"
+          ENCRYPTED_SUMMARY=$(node scripts/encrypt.js "$ENCRYPTION_KEY" "$summary")
+          echo "email-summary=$ENCRYPTED_SUMMARY" >> "$GITHUB_OUTPUT"
 
   summarize:
     name: Summarize with AI
@@ -166,13 +164,14 @@ jobs:
       - name: Build AI request body
         id: build-ai
         env:
+          ENCRYPTED_SUMMARY: ${{ needs.fetch-emails.outputs.email-summary }}
           PROMPT: ${{ inputs.prompt }}
-          EMAIL_SUMMARY: ${{ needs.fetch-emails.outputs.email-summary }}
           MODEL: ${{ inputs.model }}
           MAX_TOKENS: ${{ inputs.max-tokens }}
           TEMPERATURE: ${{ inputs.temperature }}
           TOP_P: ${{ inputs.top-p }}
         run: |
+          EMAIL_SUMMARY=$(node scripts/decrypt.js "$ENCRYPTION_KEY" "$ENCRYPTED_SUMMARY")
           BODY=$(jq -n \
             --arg model "$MODEL" \
             --arg prompt "$PROMPT
@@ -182,9 +181,8 @@ jobs:
             --argjson temperature "${TEMPERATURE}" \
             --argjson top_p "${TOP_P}" \
             '{model: $model, messages: [{role: "user", content: $prompt}], max_tokens: $max_tokens, temperature: $temperature, top_p: $top_p, stream: false}')
-          echo "body<<BODY_EOF" >> "$GITHUB_OUTPUT"
-          echo "$BODY" >> "$GITHUB_OUTPUT"
-          echo "BODY_EOF" >> "$GITHUB_OUTPUT"
+          ENCRYPTED_BODY=$(node scripts/encrypt.js "$ENCRYPTION_KEY" "$BODY")
+          echo "body=$ENCRYPTED_BODY" >> "$GITHUB_OUTPUT"
 
       - name: Run Primary Model
         id: primary
@@ -197,6 +195,7 @@ jobs:
             {"Content-Type": "application/json",
              "Authorization": "Bearer ${{ secrets.W3_SECRET_DEMO_HYPERBOLIC_API_KEY }}"}
           body: ${{ steps.build-ai.outputs.body }}
+          decrypt-inputs: 'body'
           encrypt-outputs: 'response'
           encryption-key: ${{ env.ENCRYPTION_KEY }}
 
@@ -204,13 +203,13 @@ jobs:
         id: build-fallback
         if: steps.primary.outcome == 'failure'
         env:
-          PRIMARY_BODY: ${{ steps.build-ai.outputs.body }}
+          ENCRYPTED_BODY: ${{ steps.build-ai.outputs.body }}
           MODEL: ${{ inputs.fallback-model }}
         run: |
-          BODY=$(echo "$PRIMARY_BODY" | jq --arg model "$MODEL" '.model = $model')
-          echo "body<<BODY_EOF" >> "$GITHUB_OUTPUT"
-          echo "$BODY" >> "$GITHUB_OUTPUT"
-          echo "BODY_EOF" >> "$GITHUB_OUTPUT"
+          DECRYPTED_BODY=$(node scripts/decrypt.js "$ENCRYPTION_KEY" "$ENCRYPTED_BODY")
+          BODY=$(echo "$DECRYPTED_BODY" | jq --arg model "$MODEL" '.model = $model')
+          ENCRYPTED_BODY=$(node scripts/encrypt.js "$ENCRYPTION_KEY" "$BODY")
+          echo "body=$ENCRYPTED_BODY" >> "$GITHUB_OUTPUT"
 
       - name: Run Fallback Model
         id: fallback
@@ -224,6 +223,7 @@ jobs:
             {"Content-Type": "application/json",
              "Authorization": "Bearer ${{ secrets.W3_SECRET_DEMO_HYPERBOLIC_API_KEY }}"}
           body: ${{ steps.build-fallback.outputs.body }}
+          decrypt-inputs: 'body'
           encrypt-outputs: 'response'
           encryption-key: ${{ env.ENCRYPTION_KEY }}
 
