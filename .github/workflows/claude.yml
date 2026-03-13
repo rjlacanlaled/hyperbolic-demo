@@ -39,11 +39,11 @@ jobs:
           additional_permissions: |
             actions: read
 
-  # Claude addresses Copilot's review feedback, then re-requests Copilot review
+  # Claude addresses Copilot's review feedback if there are inline comments
   address-copilot-review:
     if: |
       github.event_name == 'pull_request_review' &&
-      contains(github.event.review.user.login, 'copilot')
+      github.event.review.user.login == 'copilot-pull-request-reviewer[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -52,25 +52,52 @@ jobs:
       id-token: write
       actions: read
     steps:
+      - name: Check for inline comments
+        id: check
+        run: |
+          REVIEW_ID=${{ github.event.review.id }}
+          COMMENTS=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews/${REVIEW_ID}/comments --jq 'length')
+          echo "comment_count=$COMMENTS" >> "$GITHUB_OUTPUT"
+          if [ "$COMMENTS" -gt 0 ]; then
+            echo "has_feedback=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_feedback=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Comment ready for human review
+        if: steps.check.outputs.has_feedback == 'false'
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --body "Copilot reviewed this PR and found no issues. Ready for human review."
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Checkout repository
+        if: steps.check.outputs.has_feedback == 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
       - name: Address Copilot feedback
+        if: steps.check.outputs.has_feedback == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           additional_permissions: |
             actions: read
           prompt: |
-            GitHub Copilot has reviewed this PR and left feedback. Please:
+            GitHub Copilot has reviewed this PR and left inline comments with suggestions.
+            Please:
             1. Read all of Copilot's review comments on this PR
             2. Address each actionable suggestion by making code changes
             3. Reply to each comment explaining what you changed
-            4. If no actionable feedback remains, comment that the PR is ready for human review
+            4. After pushing fixes, comment that changes have been made and request re-review
 
       - name: Re-request Copilot review
+        if: steps.check.outputs.has_feedback == 'true'
         continue-on-error: true
         run: |
           gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers \
@@ -78,7 +105,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-  # Auto-request Copilot review on non-draft PRs
+  # Auto-request Copilot review on non-draft PRs (backup for ruleset)
   request-copilot-review:
     if: |
       github.event_name == 'pull_request' &&
